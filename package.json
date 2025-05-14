@@ -1,0 +1,40 @@
+{
+  "name": "vydhyo-user",
+  "version": "1.0.0",
+  "description": "vydhyo users service is responsible for maintenance of the user details ",
+  "main": "app.js",
+  "scripts": {
+    "test": "npm test",
+    "start": "node app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xtsservices/vydhyo-user.git"
+  },
+  "keywords": [
+    "Users"
+  ],
+  "author": "XTSServices",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Xtsservices/vydhyo-user/issues"
+  },
+  "homepage": "https://github.com/Xtsservices/vydhyo-user#readme",
+  "dependencies": {
+    "axios": "^1.6.7",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "http-proxy-middleware": "^3.0.5",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.5.0",
+    "pino": "^9.6.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.0.0"
+  }
+}
