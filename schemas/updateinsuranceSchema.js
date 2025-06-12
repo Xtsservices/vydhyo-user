@@ -7,7 +7,6 @@ const updateInsuranceValidationSchema = Joi.object({
     type: Joi.string()
         .valid('health', 'life')
         .optional(),
-
     coverageAmount: Joi.number()
         .positive()
         .optional()
