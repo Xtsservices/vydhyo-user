@@ -15,7 +15,6 @@ const updateInsuranceValidationSchema = Joi.object({
             'number.positive': '"coverageAmount" must be a positive number',
             'any.required': '"coverageAmount" is required'
         }),
-
     premiumAmount: Joi.number()
         .positive()
         .optional()
@@ -24,13 +23,11 @@ const updateInsuranceValidationSchema = Joi.object({
             'number.positive': '"premiumAmount" must be a positive number',
             'any.required': '"premiumAmount" is required'
         }),
-
     endDate: Joi.date().optional()
         .messages({
             'date.base': '"endDate" must be a valid date',
             'any.required': '"endDate" is required'
         }),
-
     startDate: Joi.date()
         .less(Joi.ref('endDate'))
         .optional()
@@ -39,8 +36,6 @@ const updateInsuranceValidationSchema = Joi.object({
             'date.less': '"startDate" must be before "endDate"',
             'any.required': '"startDate" is required'
         }),
-
-
     status: Joi.string()
         .optional()
         .default('active'),
