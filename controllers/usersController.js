@@ -1,6 +1,7 @@
+const fs = require('fs');
 const Users = require('../models/usersModel');
 const userSchema = require('../schemas/userSchema');
-
+const { convertImageToBase64 } = require('../utils/imageService');
 
 exports.getAllUsers = async (req, res) => {
   try {
@@ -36,9 +37,7 @@ exports.getUserById = async (req, res) => {
     }
     res.status(200).json({
       status: 'success',
-      data: {
-        user,
-      },
+      data: user
     });
   } catch (error) {
     res.status(500).json({
@@ -56,7 +55,7 @@ exports.updateUser = async (req, res) => {
         message: 'User ID is required in query or headers',
       });
     }
-    const { firstname, lastname, email, language, relationship, profilepic, gender, DOB, bloodgroup, maritalStatus } = req.body;
+    const { email } = req.body;
 
     const { error } = userSchema.validate(req.body);
     if (error) {
@@ -74,6 +73,17 @@ exports.updateUser = async (req, res) => {
       });
     }
     // Update the user
+    if (req.file) {
+      const filePath = req.file.path;
+      const { mimeType, base64 } = convertImageToBase64(filePath);
+      if (!req.body.profilepic) {
+        req.body.profilepic = {};
+      }
+      req.body.profilepic.data = base64;
+      req.body.profilepic.mimeType = mimeType;
+      // Clean up the temporary file
+      fs.unlinkSync(filePath);
+    }
     req.body.updatedBy = req.headers.userid;
     req.body.updatedAt = new Date();
     const user = await Users.findOneAndUpdate({ "userId": userId }, req.body, { new: true });

@@ -7,12 +7,18 @@ const kycDetailsSchema = new mongoose.Schema({
   },
   pan: {
     number: {
-      type: String, 
+      type: String,
       required: true,
     },
     attachmentUrl: {
-      type: String, 
-      // required: true,
+      mimeType: {
+        type: String,
+        required: true
+      },
+      data: {
+        type: String,
+        required: true
+      }
     },
     status: {
       type: String,
@@ -22,12 +28,18 @@ const kycDetailsSchema = new mongoose.Schema({
   },
   aadhar: {
     number: {
-      type: String, 
+      type: String,
       required: true,
     },
     attachmentUrl: {
-      type: String, 
-      // required: true,
+      mimeType: {
+        type: String,
+        required: true
+      },
+      data: {
+        type: String,
+        required: true
+      }
     },
     status: {
       type: String,
