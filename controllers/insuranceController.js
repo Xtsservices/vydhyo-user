@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const Insurance = require('../models/insuranceModel');
 const insuranceValidationSchema = require('../schemas/insuranceSchema');
-const updateInsuranceValidationSchema = require('../schemas/updateInsuranceSchema');
+const updateInsuranceValidationSchema = require('../schemas/updateinsuranceSchema');
 
 // Create a new insurance
 exports.addInsurance = async (req, res) => {
