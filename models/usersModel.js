@@ -9,6 +9,13 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     trim: true
   },
+  specialization: [
+    {
+      id: { type: String, required: true },
+      name: { type: String, required: true }      
+    }
+  ], 
+  experience: Number,
   mobile: {
     type: String,
     lowercase: true,
@@ -35,7 +42,10 @@ const userSchema = new mongoose.Schema({
     enum: ['parent', 'child', 'self', 'other'],
     default: 'self'
   },
-  profilepic: String,
+  profilepic: {
+    mimeType: String,
+    data: String,
+  },
   gender: {
     type: String,
     default: null

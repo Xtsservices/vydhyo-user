@@ -1,16 +1,18 @@
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
-const usersController = require('../controllers/usersController');
-const addressController = require('../controllers/addressController');
 const { addInsurance, getInsuranceById, updateInsurance } = require('../controllers/insuranceController');
-const { getAllUsers, getUserById, updateUser, deleteMyAccount } = usersController;
-const { getAddress, updateAddress, addAddress } = addressController;
+const { getAllUsers, getUserById, updateUser, deleteMyAccount } = require('../controllers/usersController');
+const { getAddress, updateAddress, addAddress } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
+
+// Configure multer for file handling
+const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporarily
 
 // Routes for user management
 router.get('/AllUsers', getAllUsers);
 router.get('/getUser', getUserById);
-router.put('/updateUser', updateUser);
+router.put('/updateUser', upload.single('profilePic'), updateUser);
 router.get('/deleteMyAccount', deleteMyAccount);
 
 // Routes for user address management
@@ -23,11 +25,12 @@ router.post('/addInsurance', addInsurance);
 router.get('/getInsuranceById', getInsuranceById);
 router.put('/updateInsurance', updateInsurance);
 
-
 // Routes for KYC management
-router.post('/addKYCDetails', addKYCDetails);
+router.post('/addKYCDetails', upload.fields([
+    { name: 'panFile', maxCount: 1 },
+    { name: 'aadharFile', maxCount: 1 }
+]), addKYCDetails);
 router.get('/getKYCDetails', getKYCDetails);
-// router.put('/updateInsurance', updateInsurance);
 
 
 module.exports = router;
