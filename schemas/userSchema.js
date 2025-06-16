@@ -37,6 +37,10 @@ const userSchema = Joi.object({
     .valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-')
     .allow(null, '')
     .optional(),
+  spokenLanguage: Joi.array()
+    .items(Joi.string())
+    .min(1)
+    .optional(),
   maritalStatus: Joi.string()
     .valid('single', 'married', 'divorced', 'widowed')
     .allow(null, '')
