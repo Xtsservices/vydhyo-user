@@ -24,8 +24,9 @@ const userSchema = Joi.object({
       name: Joi.string().required()
     })
   ).optional(),
+  medicalRegistrationNumber: Joi.string().min(1).max(50).optional(),
   experience: Joi.number().optional(),
-  language: Joi.string().valid('en', 'hi', 'tel').default('en'),
+  appLanguage: Joi.string().valid('en', 'hi', 'tel').default('en'),
   relationship: Joi.string().valid('parent', 'child', 'self', 'other').default('self'),
   profilepic: profilePicSchema.optional(),
   gender: Joi.string().allow(null, '').optional(),

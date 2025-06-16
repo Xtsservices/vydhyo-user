@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const { addInsurance, getInsuranceById, updateInsurance } = require('../controllers/insuranceController');
-const { getAllUsers, getUserById, updateUser, deleteMyAccount } = require('../controllers/usersController');
+const { getAllUsers, getUserById, updateUser, deleteMyAccount, updateSpecialization, updateConsultationModes, updateBankDetails } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
@@ -14,6 +14,12 @@ router.get('/AllUsers', getAllUsers);
 router.get('/getUser', getUserById);
 router.put('/updateUser', upload.single('profilePic'), updateUser);
 router.get('/deleteMyAccount', deleteMyAccount);
+router.post('/updateSpecialization', upload.fields([
+    { name: 'drgreeCertificate', maxCount: 1 },
+    { name: 'specializationCertificate', maxCount: 1 }
+]), updateSpecialization);
+router.post('/updateConsultationModes', updateConsultationModes);
+router.post('/updateBankDetails', updateBankDetails);
 
 // Routes for user address management
 router.get('/getAddress', getAddress);

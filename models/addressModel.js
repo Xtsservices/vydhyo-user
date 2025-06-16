@@ -16,8 +16,12 @@ const addressSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['Home', 'Clinic'],
+    enum: ['Home', 'Clinic', 'Hospital'],
     required: true
+  },
+  placeName: {
+    type: String,
+    default: null
   },
   address: {
     type: String,
@@ -66,6 +70,14 @@ const addressSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  startTime: {
+    type: String,
+    match: /^([0-1]\d|2[0-3]):([0-5]\d)$/ 
+  },
+  endTime: {
+    type: String,
+    match: /^([0-1]\d|2[0-3]):([0-5]\d)$/
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -74,6 +86,28 @@ const addressSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+});
+
+
+addressSchema.pre('save', function (next) {
+  if (['Clinic', 'Hospital'].includes(this.type)) {
+    if (!this.placeName) {
+      return next(new Error(`${this.type} requires placeName`));
+    }
+    if (!this.startTime || !this.endTime) {
+      return next(new Error(`${this.type} requires both startTime and endTime`));
+    }
+
+    const toMinutes = (t) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    if (toMinutes(this.startTime) >= toMinutes(this.endTime)) {
+      return next(new Error('startTime must be before endTime'));
+    }
+  }
+  next();
 });
 
 addressSchema.pre('save', function (next) {
