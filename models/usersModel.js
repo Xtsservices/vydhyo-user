@@ -91,6 +91,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  rejectionReason:{ type: String,default:null},
   createdBy: {
     type: String,
     default: null

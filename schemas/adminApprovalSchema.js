@@ -8,5 +8,12 @@ const approvalSchema = Joi.object({
   status: Joi.string().required().messages({
     'any.required': '"status" is required',
   }),
+  rejectionReason: Joi.string().when('status', {
+    is: 'rejected',
+    then: Joi.required().messages({
+      'any.required': '"rejectionReason" is required when status is rejected',
+    }),
+    otherwise: Joi.forbidden(),
+  }),
 });
 module.exports =  approvalSchema;

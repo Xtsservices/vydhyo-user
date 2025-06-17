@@ -11,6 +11,7 @@ exports.approveDoctorByAdmin = async (req, res) => {
             message: error.details[0].message,
           });
         }
+        req.body.isVerified =true;
         req.body.updatedBy = req.headers.userid;
         req.body.updatedAt = new Date();
         const doctorApproval = await Users.findOneAndUpdate({ "userId": req.body.userId }, req.body, { new: true });

@@ -1,7 +1,7 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const usersRoutes = require('./routes/usersRoutes');
-const adminRouter=require('./routes/adminApprovalRouter')
+const adminRouter=require('./routes/adminRouter')
 const bodyParser = require("body-parser");
 require('dotenv').config();
 const connectDB = require('./utils/db');
