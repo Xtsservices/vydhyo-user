@@ -10,8 +10,24 @@ const { userAggregation } = require('../queryBuilder/userAggregate');
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await Users.find({}, { refreshToken: 0 });
-    res.status(200).json({
+    let obj={}
+    obj.status='inActive'
+
+    if (!req.query?.type) {
+      return res.status(400).json({ error: "'type' query parameter is required." });
+    }
+    if(req.query.status){
+      obj.status=req.query?.status
+    }
+    obj.role=req.query?.type
+    const users = await Users.find(obj, { refreshToken: 0 });
+    if(users.length<1){
+      return res.status(404).json({
+        status: 'fail',
+        message: "no data found",
+      });
+    }
+   return res.status(200).json({
       status: 'success',
       data: users,
     });
