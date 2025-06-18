@@ -34,7 +34,6 @@ const userSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'inActive'],
     default: 'inActive'
   },
   consultationModeFee: [{
