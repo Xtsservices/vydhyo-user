@@ -10,9 +10,9 @@ const userSchema = new mongoose.Schema({
     trim: true
   },
   specialization: {
-    id: { type: String, required: true },
-    name: { type: String, required: true },
-    experience: { type: Number, required: true },
+    id: { type: String,   },
+    name: { type: String,   },
+    experience: { type: Number,   },
     drgreeCertificate: {
       mimeType: String,
       data: String,
@@ -22,15 +22,15 @@ const userSchema = new mongoose.Schema({
       data: String,
     },
   },
-  medicalRegistrationNumber: { type: String, required: true },
+  medicalRegistrationNumber: { type: String,   },
   mobile: {
     type: String,
     lowercase: true,
     trim: true
-  },
+  },  
   userId: {
     type: String,
-    required: true
+     
   },
   status: {
     type: String,
@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
     default: 'inActive'
   },
   consultationModeFee: [{
-    type: { type: String, required: true },
+    type: { type: String,   },
     fee: { type: Number, default: 0 },
     currency: { type: String, default: 'INR' }
   }],

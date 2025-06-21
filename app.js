@@ -2,6 +2,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const usersRoutes = require('./routes/usersRoutes');
 const adminRouter=require('./routes/adminRouter')
+const doctorsRouter=require('./routes/doctorsRouter')
 const bodyParser = require("body-parser");
 require('dotenv').config();
 const connectDB = require('./utils/db');
@@ -17,6 +18,8 @@ connectDB();
 // Routes
 app.use('/users', usersRoutes);
 app.use('/admin', adminRouter);
+app.use('/doctor', doctorsRouter);
+
 
 // Connect to MongoDB and start server
 const PORT = process.env.PORT || 5000;
