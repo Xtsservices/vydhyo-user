@@ -100,6 +100,13 @@ exports.updateUser = async (req, res) => {
           message: error.details[0].message,
         });
       }
+      const mobileExists = await Users.findOne({ mobile:req.body?.mobile });
+      if (mobileExists && mobileExists.userId !== userId) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'mobile already in use by another user',
+        });
+      }
     }
     // Check if the email is already in use by another user
 
