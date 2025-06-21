@@ -1,6 +1,7 @@
 const fs = require('fs');
 const Users = require('../models/usersModel');
 const userSchema = require('../schemas/userSchema');
+const {receptionistSchema}=require('../schemas/doctor_receptionistSchema')
 const { convertImageToBase64 } = require('../utils/imageService');
 const specializationSchema = require('../schemas/specializationSchema');
 const consultationFeeSchema = require('../schemas/consultationFeeSchema');
@@ -80,20 +81,37 @@ exports.updateUser = async (req, res) => {
     }
     const { email } = req.body;
 
-    const { error } = userSchema.validate(req.body);
-    if (error) {
-      return res.status(400).json({
-        status: 'fail',
-        message: error.details[0].message,
-      });
+    if(req.headers?.role=='doctor'){
+      const { error } = userSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          status: 'fail',
+          message: error.details[0].message,
+        });
+      }
+
+    }
+    if(req.headers?.role=='receptionist')
+    {
+      const { error } = receptionistSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          status: 'fail',
+          message: error.details[0].message,
+        });
+      }
     }
     // Check if the email is already in use by another user
-    const emailExists = await Users.findOne({ email });
-    if (emailExists && emailExists.userId !== userId) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'Email already in use by another user',
-      });
+
+    if(req.headers?.role=='doctor'){
+      const emailExists = await Users.findOne({ email });
+      if (emailExists && emailExists.userId !== userId) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Email already in use by another user',
+        });
+      }
+
     }
     // Update the user
     if (req.file) {
