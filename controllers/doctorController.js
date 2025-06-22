@@ -3,6 +3,8 @@ const Users = require("../models/usersModel");
 const doctorReceptionist = require("../models/doctor_receptionistModel");
 const { v4: uuidv4 } = require("uuid");
 const { convertImageToBase64 } = require('../utils/imageService');
+const Sequence = require("../sequence/sequenceSchema");
+const sequenceConstant=require('../utils/constants')
 const fs = require('fs');
 
 exports.createReceptionist = async (req, res) => {
@@ -14,14 +16,7 @@ exports.createReceptionist = async (req, res) => {
         message: error.details[0].message,
       });
     }
-    req.body.userId = uuidv4().replace(/-/g, "");
-    req.body.receptionistId = req.body.userId;
-    req.body.status = "active";
-    req.body.role = "receptionist";
-    req.body.doctorId = req.headers?.userid;
-    req.body.createdBy = req.headers?.userid;
-    req.body.assignedBy = req.headers?.userid;
-    req.body.updatedBy = req.headers?.userid;
+
     const doctorReceptionistData = await doctorReceptionist.findOne({
       doctorId: req.headers.userid,
       receptionistId: req.body.receptionistId,
@@ -33,7 +28,24 @@ exports.createReceptionist = async (req, res) => {
         message: "same Doctor with receptionist exist",
       });
     }
+  const mobileExists = await Users.findOne({ mobile:req.body?.mobile });
+    if (mobileExists) {
+     return res.status(400).json({
+     status: 'fail',
+      message: 'mobile already in use by another user',
+     });
+    }
 
+    req.body.status = "active";
+    req.body.role = "receptionist";
+    req.body.doctorId = req.headers?.userid;
+    req.body.createdBy = req.headers?.userid;
+    req.body.assignedBy = req.headers?.userid;
+    req.body.updatedBy = req.headers?.userid;
+  
+    const counter = await Sequence.findByIdAndUpdate({ _id: sequenceConstant.receptionist.receptionist },{ $inc: { seq: 1 } },{ new: true, upsert: true });
+    req.body.userId = sequenceConstant.receptionist.sequence.concat(counter.seq);
+    req.body.receptionistId = req.body.userId;
     if (req.file) {
       const filePath = req.file.path;
       const { mimeType, base64 } = convertImageToBase64(filePath);
@@ -46,12 +58,15 @@ exports.createReceptionist = async (req, res) => {
       fs.unlinkSync(filePath);
     }
     const user = await Users.create(req.body);
-    await doctorReceptionist.create(req.body);
+   const receptionist= await doctorReceptionist.create(req.body);
+   if(user && receptionist){
     return res.status(200).json({
       status: "pass",
       message: "receptionist created successfully",
       data: user,
     });
+   }
+   
   } catch (error) {
     return res.status(500).json({
       status: "fail",
@@ -69,11 +84,14 @@ exports.getDoctorAndReceptionist = async (req, res) => {
       obj.role='patient'
     }
     if (req.query?.mobile) {
-      obj.mobile = { $regex: req.query.mobile, $options: 'i' };
+      obj.mobile =req.query.mobile
     }
     const userData=await Users.find(obj)
     if(userData.length<1){
       return res.status(400).json({message:"no data found"})
+    }
+    if(userData.length==1){
+      return res.status(200).json({message:"data fetch successfully",data:userData[0]})
     }
     return res.status(200).json({message:"data fetch successfully",data:userData})
 
