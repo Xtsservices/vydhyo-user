@@ -1,11 +1,10 @@
 const userAggregation = (userId, excludeRefreshToken = false) => {
-  const projectFields = {
-    __v: 0
-  };
+  const projectFields = {};
 
   if (excludeRefreshToken) {
-    projectFields.refreshToken = 1;
+    projectFields.refreshToken = 0;
   }
+
 
   return [
     { $match: { userId: userId } },
