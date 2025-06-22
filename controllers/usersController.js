@@ -10,24 +10,24 @@ const { userAggregation } = require('../queryBuilder/userAggregate');
 
 exports.getAllUsers = async (req, res) => {
   try {
-    let obj={}
-    obj.status='inActive'
+    let obj = {}
+    obj.status = 'inActive'
 
     if (!req.query?.type) {
       return res.status(400).json({ error: "'type' query parameter is required." });
     }
-    if(req.query.status){
-      obj.status=req.query?.status
+    if (req.query.status) {
+      obj.status = req.query?.status
     }
-    obj.role=req.query?.type
+    obj.role = req.query?.type
     const users = await Users.find(obj, { refreshToken: 0 });
-    if(users.length<1){
+    if (users.length < 1) {
       return res.status(404).json({
         status: 'fail',
         message: "no data found",
       });
     }
-   return res.status(200).json({
+    return res.status(200).json({
       status: 'success',
       data: users,
     });
@@ -71,7 +71,7 @@ exports.getUserById = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
   try {
-    const userId = req.query.userId || req.headers.userid;
+    const userId = req.body.userId || req.headers.userid;
     if (!userId) {
       return res.status(400).json({
         status: 'fail',
@@ -106,6 +106,14 @@ exports.updateUser = async (req, res) => {
       req.body.profilepic.mimeType = mimeType;
       // Clean up the temporary file
       fs.unlinkSync(filePath);
+    }
+    let { spokenLanguage } = req.body;
+    if (typeof spokenLanguage === 'string') {
+      try {
+        req.body.spokenLanguage = JSON.parse(spokenLanguage);
+      } catch (err) {
+        return res.status(400).json({ message: '"spokenLanguage" must be a valid JSON array' });
+      }
     }
     req.body.updatedBy = req.headers.userid;
     req.body.updatedAt = new Date();
@@ -280,7 +288,7 @@ exports.updateConsultationModes = async (req, res) => {
   }
 };
 
-exports.updateBankDetails = async (req, res) => { 
+exports.updateBankDetails = async (req, res) => {
   try {
     const userId = req.query.userId || req.headers.userid;
 
