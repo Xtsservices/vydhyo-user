@@ -43,8 +43,8 @@ exports.createReceptionist = async (req, res) => {
     req.body.assignedBy = req.headers?.userid;
     req.body.updatedBy = req.headers?.userid;
   
-    const counter = await Sequence.findByIdAndUpdate({ _id: sequenceConstant.receptionist.receptionist },{ $inc: { seq: 1 } },{ new: true, upsert: true });
-    req.body.userId = sequenceConstant.receptionist.sequence.concat(counter.seq);
+    const counter = await Sequence.findByIdAndUpdate({ _id: sequenceConstant.USERSEQUENCE.USER_MODEL },{ $inc: { seq: 1 } },{ new: true, upsert: true });
+    req.body.userId = sequenceConstant.USERSEQUENCE.SEQUENCE.concat(counter.seq);
     req.body.receptionistId = req.body.userId;
     if (req.file) {
       const filePath = req.file.path;

@@ -1,8 +1,8 @@
-const sequence = {
-    receptionist: {
-        receptionist: 'RECEPTIONIST',
-        sequence: 'VYDUSER'
-    }
+const PREFIX_SEQUENCE = {
+  USERSEQUENCE: {
+    USER_MODEL: "USER",
+    SEQUENCE: "VYDUSER",
+  },
 };
 
-module.exports = sequence;
+module.exports = PREFIX_SEQUENCE;
