@@ -2,7 +2,6 @@ const { receptionistSchema } = require("../schemas/doctor_receptionistSchema");
 const { patientSchema } = require("../schemas/ReceptionPatientSchema");
 const Users = require("../models/usersModel");
 const doctorReceptionist = require("../models/doctor_receptionistModel");
-const { v4: uuidv4 } = require("uuid");
 const { convertImageToBase64 } = require('../utils/imageService');
 const Sequence = require("../sequence/sequenceSchema");
 const sequenceConstant = require('../utils/constants')
@@ -76,7 +75,7 @@ exports.createReceptionist = async (req, res) => {
   }
 };
 
-exports.getReceptionistAndPatient = async (req, res) => {
+exports.searchAndFetchUser = async (req, res) => {
   try {
     let obj = {}
     if (req.headers.role == 'doctor') {
