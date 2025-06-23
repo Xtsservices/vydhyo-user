@@ -1,14 +1,5 @@
 const userAggregation = (userId, excludeRefreshToken = false) => {
-  const projectFields = {
-    refreshToken : 1
-  };
-
-  if (excludeRefreshToken) {
-    projectFields.refreshToken = 0;
-  }
-
-
-  return [
+  const pipeline = [
     { $match: { userId: userId } },
     {
       $lookup: {
@@ -45,11 +36,19 @@ const userAggregation = (userId, excludeRefreshToken = false) => {
         path: '$insuranceDetails',
         preserveNullAndEmptyArrays: true
       }
-    },
-    {
-      $project: projectFields
     }
   ];
+
+  // Only add $project if exclusion is needed
+  if (excludeRefreshToken) {
+    pipeline.push({
+      $project: {
+        refreshToken: 0
+      }
+    });
+  }
+
+  return pipeline;
 };
 
 module.exports = {
