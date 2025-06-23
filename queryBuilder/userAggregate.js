@@ -1,5 +1,7 @@
 const userAggregation = (userId, excludeRefreshToken = false) => {
-  const projectFields = {};
+  const projectFields = {
+    refreshToken : 1
+  };
 
   if (excludeRefreshToken) {
     projectFields.refreshToken = 0;
