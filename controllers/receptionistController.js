@@ -76,19 +76,8 @@ exports.fetchMyDoctors = async (req, res) => {
           path: '$doctor',
           preserveNullAndEmptyArrays: true
         }
-      },
-      {
-        $project: {
-          receptionistId: 1,
-          doctorId: 1,
-          doctor: 1,
-          doctor: {
-            firstname: '$doctor.firstname',
-            lastname: '$doctor.lastname',
-            profilepic: '$doctor.profilepic'
-          }
-        }
       }
+      
     ]);
 
 
