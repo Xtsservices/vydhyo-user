@@ -365,3 +365,33 @@ exports.updateBankDetails = async (req, res) => {
     });
   }
 };
+
+exports.getUsersByIds = async (req, res) => {
+  try {
+    const userIds = req.body.userIds;
+    if (!userIds || !Array.isArray(userIds)) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'userIds required and must be an array of user IDs',
+      });
+    }
+
+    const users = await Users.find({ userId: { $in: userIds } },
+      { userId: 1, firstname: 1, lastname: 1, email: 1, mobile: 1, profilepic: 1, gender: 1, DOB: 1 });
+    if (users.length < 1) {
+      return res.status(404).json({
+        status: 'fail',
+        message: "no users data found",
+      });
+    }
+    return res.status(200).json({
+      status: 'success',
+      users,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+}
