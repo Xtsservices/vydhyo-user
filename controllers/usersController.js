@@ -192,7 +192,10 @@ exports.deleteMyAccount = async (req, res) => {
 
 exports.updateSpecialization = async (req, res) => {
   try {
+    console.log("updateSpecialization called");
     const userId = req.query.userId || req.headers.userid;
+    console.log("userId:", userId);
+    console.log("req.body:", req.body);
     if (!userId) {
       return res.status(400).json({
         status: 'fail',
@@ -201,18 +204,29 @@ exports.updateSpecialization = async (req, res) => {
     }
 
     const { error } = specializationSchema.validate(req.body);
+    // console.log("req.body:",error.details[0].message);
     if (error) {
       return res.status(400).json({
         status: 'fail',
         message: error.details[0].message,
       });
     }
+
+    console.log("req.files:", req.files);
     if (!req.files.drgreeCertificate || req.files.drgreeCertificate.length === 0) {
       return res.status(400).json({ status: 'fail', message: 'drgreeCertificate file is required' });
     }
     if (!req.files.specializationCertificate || req.files.specializationCertificate.length === 0) {
       return res.status(400).json({ status: 'fail', message: 'specializationCertificate file is required' });
     }
+    console.log("---------------------------------------------");
+    console.log("Files received:", req.files.drgreeCertificate);
+
+        console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+
+
+        console.log("Files received:", req.files.specializationCertificate);
+
     // Optional: Handle file uploads if you're sending certificates as files instead of base64
     if (req.files.drgreeCertificate && req.files.drgreeCertificate.length > 0) {
       const filePath = req.files.drgreeCertificate[0].path;
@@ -258,6 +272,7 @@ exports.updateSpecialization = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Error in updateSpecialization:", error);
     return res.status(500).json({
       status: 'fail',
       message: error.message,
