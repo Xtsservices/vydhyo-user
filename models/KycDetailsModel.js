@@ -26,7 +26,7 @@ const kycDetailsSchema = new mongoose.Schema({
       default: 'pending',
     }
   },
-  aadhar: {
+  voter: {
     number: {
       type: String,
       required: true,
