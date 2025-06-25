@@ -2,7 +2,16 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const { addInsurance, getInsuranceById, updateInsurance } = require('../controllers/insuranceController');
-const { getAllUsers, getUserById, updateUser, deleteMyAccount, updateSpecialization, updateConsultationModes, updateBankDetails } = require('../controllers/usersController');
+const { 
+    getAllUsers,
+    getUserById,
+    updateUser,
+    deleteMyAccount,
+    updateSpecialization,
+    updateConsultationModes,
+    updateBankDetails,
+    getUsersByIds
+} = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
@@ -20,6 +29,7 @@ router.post('/updateSpecialization', upload.fields([
 ]), updateSpecialization);
 router.post('/updateConsultationModes', updateConsultationModes);
 router.post('/updateBankDetails', updateBankDetails);
+router.post('/getUsersByIds', getUsersByIds);
 
 // Routes for user address management
 router.get('/getAddress', getAddress);
