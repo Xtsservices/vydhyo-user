@@ -37,9 +37,15 @@ class CommonController {
         }
     }
 
-    static async getTotalAmount() {
+    static async getTotalAmount(doctorId) {
+
+        let url = 'http://localhost:4003/finance/getTotalAmount';
+        if (doctorId) {
+            url += `?doctorId=${encodeURIComponent(doctorId)}`;
+        }
+
         try {
-            const response = await axios.get('http://localhost:4003/finance/getTotalAmount');
+            const response = await axios.get(url);
             return response.data;
         } catch (error) {
             console.error('Error fetching total amount:', error);
@@ -47,15 +53,47 @@ class CommonController {
         }
     }
 
-    static async getAppointmentTypeCounts() {
+    static async getAppointmentTypeCounts(doctorId) {
+        let url = 'http://localhost:4005/appointment/getAppointmentTypeCounts';
+        if (doctorId) {
+            url += `?doctorId=${encodeURIComponent(doctorId)}`;
+        }
         try {
-            const response = await axios.get('http://localhost:4005/appointment/getAppointmentTypeCounts');
+            const response = await axios.get(url);
             return response.data;
         } catch (error) {
             console.error('Error fetching appointment type counts:', error);
             throw error;
         }
     }
+     static async getAppointmentCounts(doctorId) {
+        let url = 'http://localhost:4005/appointment/getTodayAndUpcomingAppointmentsCount';
+        if (doctorId) {
+            url += `?doctorId=${encodeURIComponent(doctorId)}`;
+        }
+        try {
+            const response = await axios.get(url);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching appointment type counts:', error);
+            throw error;
+        }
+    }
+    static async getUniquePatientsStats(doctorId) {
+        let url = 'http://localhost:4005/appointment/getUniquePatientsStats';
+        if (doctorId) {
+            url += `?doctorId=${encodeURIComponent(doctorId)}`;
+        }
+        try {
+            const response = await axios.get(url);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching unique patients stats:', error);
+            throw error;
+        }
+    }
+
+    
 }
 
 
