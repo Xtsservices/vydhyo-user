@@ -93,6 +93,21 @@ class CommonController {
         }
     }
 
+     static async getTopDoctorsByAppointmentCount() {
+        let url = 'http://localhost:4005/appointment/getTopDoctorsByAppointmentCount';
+       
+        try {
+            const response = await axios.get(url);
+            console.log('Top doctors response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching unique patients stats:', error);
+            throw error;
+        }
+    }
+
+    
+
     
 }
 
