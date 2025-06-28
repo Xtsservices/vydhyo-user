@@ -21,12 +21,15 @@ exports.getUserCounts = async (req, res) => {
         const AppointmentCounts = await CommonController.getAppointmentCounts(req.headers.userid);
         const UniquePatientsCounts = await CommonController.getUniquePatientsStats(req.headers.userid);
 
+        const topDoctors = await CommonController.getTopDoctorsByAppointmentCount();
+
         return res.status(200).json({
             success: true,
             totalAmount: Amount,
             appointmentTypes: AppointmentTypeCounts.result,
             appointmentCounts: AppointmentCounts.data,
-            uniquePatients: UniquePatientsCounts.data
+            uniquePatients: UniquePatientsCounts.data,
+            topDoctors: topDoctors.data
         });
     } catch (error) {
         console.error('Error fetching user counts:', error);
