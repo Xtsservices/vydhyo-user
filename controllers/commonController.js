@@ -5,7 +5,7 @@ const axios = require('axios');
 class CommonController {
     static async getDoctorsCounts() {
         try {
-            const pendingCount = await Users.countDocuments({ status: 'pending', role: 'doctor' });
+            const pendingCount = await Users.countDocuments({ status: { $in: ['inActive', 'pending'] }, role: 'doctor' });
             const approvedCount = await Users.countDocuments({ status: 'approved', role: 'doctor' });
             const rejectedCount = await Users.countDocuments({ status: 'rejected', role: 'doctor' });
 
@@ -60,6 +60,7 @@ class CommonController {
         }
         try {
             const response = await axios.get(url);
+           
             return response.data;
         } catch (error) {
             console.error('Error fetching appointment type counts:', error);

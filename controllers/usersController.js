@@ -28,6 +28,7 @@ exports.getAllUsers = async (req, res) => {
         message: "no data found",
       });
     }
+    
     return res.status(200).json({
       status: 'success',
       data: users,

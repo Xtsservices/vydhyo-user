@@ -129,7 +129,7 @@ console.log('PAN Validation Response:', 1900);
 
     // here we need to validate the PAN number using an external service
     const panValidationResponse = await validatePan(req.body.panNumber, userId);
-console.log('PAN Validation Response:', panValidationResponse);
+// console.log('PAN Validation Response:', panValidationResponse);
     if (!panValidationResponse.http_response_code === 200) {
       return res.status(400).json({
         status: 'fail',
