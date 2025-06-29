@@ -110,9 +110,9 @@ exports.addKYCDetails = async (req, res) => {
     if (!req.files.panFile || req.files.panFile.length === 0) {
       return res.status(400).json({ status: 'fail', message: 'PAN file is required' });
     }
-    if (!req.files.voterFile || req.files.voterFile.length === 0) {
-      return res.status(400).json({ status: 'fail', message: 'voter file is required' });
-    }
+    // if (!req.files.voterFile || req.files.voterFile.length === 0) {
+    //   return res.status(400).json({ status: 'fail', message: 'voter file is required' });
+    // }
     if (req.files.panFile && req.files.panFile.length > 0) {
       const filePath = req.files.panFile[0].path;
       const { mimeType, base64 } = convertImageToBase64(filePath);
@@ -137,22 +137,22 @@ console.log('PAN Validation Response:', 1900);
       });
     }
 
-    if (req.files.voterFile && req.files.voterFile.length > 0) {
-      const filePath = req.files.voterFile[0].path;
-      const { mimeType, base64 } = convertImageToBase64(filePath);
-      if (!req.body.voterAttachmentUrl) {
-        req.body.voterAttachmentUrl = {};
-      }
-      req.body.voterAttachmentUrl.data = base64;
-      req.body.voterAttachmentUrl.mimeType = mimeType;
-      // Clean up the temporary file
-      fs.unlinkSync(filePath);
-    }
+    // if (req.files.voterFile && req.files.voterFile.length > 0) {
+    //   const filePath = req.files.voterFile[0].path;
+    //   const { mimeType, base64 } = convertImageToBase64(filePath);
+    //   if (!req.body.voterAttachmentUrl) {
+    //     req.body.voterAttachmentUrl = {};
+    //   }
+    //   req.body.voterAttachmentUrl.data = base64;
+    //   req.body.voterAttachmentUrl.mimeType = mimeType;
+    //   // Clean up the temporary file
+    //   fs.unlinkSync(filePath);
+    // }
 
-    console.log('Request step3:', req.body.panNumber, req.body.voterNumber);
+    console.log('Request step3:', req.body.panNumber, );
 
     const encryptedPanNumber = encrypt(req.body.panNumber);
-    const encryptedVoterNumber = encrypt(req.body.voterNumber);
+    // const encryptedVoterNumber = encrypt(req.body.voterNumber);
     const kycDetails = {
       userId: req.body.userId,
       pan: {
@@ -163,14 +163,14 @@ console.log('PAN Validation Response:', 1900);
         },
         status: 'pending',
       },
-      voter: {
-        number: encryptedVoterNumber,
-        attachmentUrl: {
-          data: req.body.voterAttachmentUrl ? req.body.voterAttachmentUrl.data : null,
-          mimeType: req.body.voterAttachmentUrl ? req.body.voterAttachmentUrl.mimeType : null
-        },
-        status: 'pending',
-      },
+      // voter: {
+      //   number: encryptedVoterNumber,
+      //   attachmentUrl: {
+      //     data: req.body.voterAttachmentUrl ? req.body.voterAttachmentUrl.data : null,
+      //     mimeType: req.body.voterAttachmentUrl ? req.body.voterAttachmentUrl.mimeType : null
+      //   },
+      //   status: 'pending',
+      // },
       kycVerified: false,
       createdAt: new Date(),
       updatedAt: new Date()
