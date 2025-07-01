@@ -13,6 +13,9 @@ const userSchema = new mongoose.Schema({
     id: { type: String,   },
     name: { type: String,   },
     experience: { type: Number,   },
+    degree: { type: String }, // Added for degree (e.g., MBBS, MD)
+    services: { type: String, default: '' }, // Added for services, optional
+    bio: { type: String, default: '' },
     drgreeCertificate: {
       mimeType: String,
       data: String,

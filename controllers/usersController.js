@@ -214,19 +214,27 @@ exports.updateSpecialization = async (req, res) => {
     }
 
     console.log("req.files:", req.files);
-    if (!req.files.drgreeCertificate || req.files.drgreeCertificate.length === 0) {
-      return res.status(400).json({ status: 'fail', message: 'drgreeCertificate file is required' });
-    }
-    if (!req.files.specializationCertificate || req.files.specializationCertificate.length === 0) {
-      return res.status(400).json({ status: 'fail', message: 'specializationCertificate file is required' });
-    }
+    // if (!req.files.drgreeCertificate || req.files.drgreeCertificate.length === 0) {
+    //   return res.status(400).json({ status: 'fail', message: 'drgreeCertificate file is required' });
+    // }
+    // if (!req.files.specializationCertificate || req.files.specializationCertificate.length === 0) {
+    //   return res.status(400).json({ status: 'fail', message: 'specializationCertificate file is required' });
+    // }
     console.log("---------------------------------------------");
-    console.log("Files received:", req.files.drgreeCertificate);
 
         console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
 
-
-        console.log("Files received:", req.files.specializationCertificate);
+ const updateFields = {
+      specialization: {
+        name: req.body.name, // Specialization name from frontend
+        experience: Number(req.body.experience), // Years of experience
+        degree: req.body.degree, // Selected degree (e.g., MBBS, MD)
+        services: req.body.services || '', // Optional services provided
+        bio: req.body.bio || '', // Optional bio/profile info
+      },
+      updatedAt: new Date(),
+      updatedBy: userId,
+    };
 
     // Optional: Handle file uploads if you're sending certificates as files instead of base64
     if (req.files.drgreeCertificate && req.files.drgreeCertificate.length > 0) {
@@ -235,28 +243,28 @@ exports.updateSpecialization = async (req, res) => {
       if (!req.body.drgreeCertificate) {
         req.body.drgreeCertificate = {};
       }
-      req.body.drgreeCertificate.data = base64;
-      req.body.drgreeCertificate.mimeType = mimeType;
-      // Clean up the temporary file
-      fs.unlinkSync(filePath);
+      
+      
+     updateFields.specialization.degreeCertificate = { data: base64, mimeType };
+           fs.unlinkSync(filePath);
+ // Clean up temporary file
+     
     }
     if (req.files.specializationCertificate && req.files.specializationCertificate.length > 0) {
       const filePath = req.files.specializationCertificate[0].path;
       const { mimeType, base64 } = convertImageToBase64(filePath);
-      if (!req.body.specializationCertificate) {
-        req.body.specializationCertificate = {};
-      }
-      req.body.specializationCertificate.data = base64;
-      req.body.specializationCertificate.mimeType = mimeType;
-      // Clean up the temporary file
+      updateFields.specialization.specializationCertificate = { data: base64, mimeType };
+       // Clean up the temporary file
       fs.unlinkSync(filePath);
     }
 
-    const updateFields = {
-      specialization: req.body,
-      updatedAt: new Date(),
-      updatedBy: userId,
-    };
+    // const updateFields = {
+    //   specialization: req.body,
+    //   updatedAt: new Date(),
+    //   updatedBy: userId,
+    // };
+
+   
 
     const user = await Users.findOneAndUpdate({ userId }, updateFields, { new: true });
 
