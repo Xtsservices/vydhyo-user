@@ -12,7 +12,7 @@ const {
     updateBankDetails,
     getUsersByIds
 } = require('../controllers/usersController');
-const { getAddress, updateAddress, addAddress } = require('../controllers/addressController');
+const { getAddress, updateAddress, addAddress, getClinicAddress } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
 // Configure multer for file handling
@@ -33,6 +33,7 @@ router.post('/getUsersByIds', getUsersByIds);
 
 // Routes for user address management
 router.get('/getAddress', getAddress);
+router.get('/getClinicAddress', getClinicAddress);
 router.post('/addAddress', addAddress);
 router.put('/updateAddress', updateAddress);
 

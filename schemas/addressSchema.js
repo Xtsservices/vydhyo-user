@@ -3,18 +3,11 @@ const Joi = require('joi');
 const timeRegex = /^([0-1]\d|2[0-3]):([0-5]\d)$/;
 
 const addressJoiSchema = Joi.object({
-    userId: Joi.string().required(),
-    countrycode: Joi.string().default('+91'),
     status: Joi.string().valid('Active', 'InActive').default('Active'),
-    type: Joi.string().valid('Home', 'Clinic', 'Hospital').required(),
-
-    placeName: Joi.string().allow(null).when('type', {
-        is: Joi.valid('Clinic', 'Hospital'),
-        then: Joi.string().required().messages({
-            'any.required': 'placeName is required for type Clinic or Hospital'
-        })
-    }),
-
+    userId: Joi.string().required(),
+    type: Joi.string().required(),
+    clinicName: Joi.string().required(),
+    mobile: Joi.string().allow(null),
     address: Joi.string().allow(null),
     city: Joi.string().allow(null),
     state: Joi.string().allow(null),
@@ -27,6 +20,7 @@ const addressJoiSchema = Joi.object({
         type: Joi.string().valid('Point').default('Point'),
         coordinates: Joi.array().items(Joi.number()).length(2).default([0, 0])
     }).default(),
+
     startTime: Joi.when('type', {
         is: Joi.valid('Clinic', 'Hospital'),
         then: Joi.string().pattern(timeRegex).required().messages({
@@ -46,6 +40,7 @@ const addressJoiSchema = Joi.object({
     }),
 
 }).custom((value, helpers) => {
+    // Time validation
     if (['Clinic', 'Hospital'].includes(value.type)) {
         const toMinutes = (t) => {
             const [h, m] = t.split(':').map(Number);
@@ -56,8 +51,8 @@ const addressJoiSchema = Joi.object({
             return helpers.message('startTime must be before endTime');
         }
     }
+
     return value;
 }, 'Custom time validation');
-
 
 module.exports = addressJoiSchema;

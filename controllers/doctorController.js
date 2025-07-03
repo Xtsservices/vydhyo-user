@@ -151,7 +151,7 @@ exports.createPatient = async (req, res) => {
 
 exports.getStaffByCreator = async (req, res) => {
   try {
-    const userId = req.headers.userid;
+    const userId = req.params.userid;
 
     // Validate that userId exists in headers
     if (!userId) {

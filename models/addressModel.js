@@ -8,7 +8,7 @@ const addressSchema = new mongoose.Schema({
     unique: true,
     required: true
   },
-  countrycode: { type: String, default: '+91' },
+  mobile: { type: String, default: null },
   status: {
     type: String,
     enum: ['Active', 'InActive'],
@@ -19,9 +19,10 @@ const addressSchema = new mongoose.Schema({
     enum: ['Home', 'Clinic', 'Hospital'],
     required: true
   },
-  placeName: {
+  clinicName: {
     type: String,
-    default: null
+    required: true,
+    unique: true,
   },
   address: {
     type: String,
@@ -91,9 +92,6 @@ const addressSchema = new mongoose.Schema({
 
 addressSchema.pre('save', function (next) {
   if (['Clinic', 'Hospital'].includes(this.type)) {
-    if (!this.placeName) {
-      return next(new Error(`${this.type} requires placeName`));
-    }
     if (!this.startTime || !this.endTime) {
       return next(new Error(`${this.type} requires both startTime and endTime`));
     }

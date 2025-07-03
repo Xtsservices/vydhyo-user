@@ -4,6 +4,7 @@ const approvalSchema=require('../schemas/adminApprovalSchema')
 const Users = require('../models/usersModel');
 exports.approveDoctorByAdmin = async (req, res) => {
     try {
+
         const { error } = approvalSchema.validate(req.body);
         console.log('Approval request body:', req.body);
         if (error) {
@@ -17,6 +18,8 @@ exports.approveDoctorByAdmin = async (req, res) => {
         }
         req.body.updatedBy = req.headers.userid;
         req.body.updatedAt = new Date();
+        console.log("req.body",req.body)
+        // return
         const doctorApproval = await Users.findOneAndUpdate({ "userId": req.body.userId }, req.body, { new: true });
         console.log('Doctor approval response:', doctorApproval);
         if (!doctorApproval) {

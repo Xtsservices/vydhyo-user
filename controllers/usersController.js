@@ -81,7 +81,7 @@ exports.updateUser = async (req, res) => {
       });
     }
     const { email } = req.body;
-
+console.log(req.headers,"req.headers")
     if(req.headers?.role=='doctor'){
       const { error } = userSchema.validate(req.body);
       if (error) {
@@ -143,6 +143,7 @@ exports.updateUser = async (req, res) => {
     }
     req.body.updatedBy = req.headers.userid;
     req.body.updatedAt = new Date();
+    console.log("req.body",req.body)
     const user = await Users.findOneAndUpdate({ "userId": userId }, req.body, { new: true });
     if (!user) {
       return res.status(404).json({
