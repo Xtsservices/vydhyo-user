@@ -1,4 +1,4 @@
-const { receptionistSchema } = require("../schemas/doctor_receptionistSchema");
+const { receptionistSchema, editReceptionistSchema } = require("../schemas/doctor_receptionistSchema");
 const schedule = require("../models/scheduleModel");
 const { patientSchema } = require("../schemas/ReceptionPatientSchema");
 const Users = require("../models/usersModel");
@@ -40,7 +40,7 @@ exports.createReceptionist = async (req, res) => {
     }
 
     req.body.status = "active";
-    req.body.role = "receptionist";
+    // req.body.role = "receptionist";
     req.body.doctorId = req.headers?.userid;
     req.body.createdBy = req.headers?.userid;
     req.body.assignedBy = req.headers?.userid;
@@ -60,6 +60,11 @@ exports.createReceptionist = async (req, res) => {
       // Clean up the temporary file
       fs.unlinkSync(filePath);
     }
+
+    
+    // Ensure access is an array
+    req.body.access = req.body.access || [];
+
     const user = await Users.create(req.body);
     const receptionist = await doctorReceptionist.create(req.body);
     if (user && receptionist) {
@@ -160,7 +165,7 @@ exports.getStaffByCreator = async (req, res) => {
     const staff = await Users.find({
       createdBy: userId,
       isDeleted: false, // Exclude deleted users
-    }).select('firstname lastname email role mobile createdAt status');
+    }).select('firstname lastname email role mobile createdAt status userId lastLogout isLoggedIn lastLogin');
 
     if (!staff || staff.length === 0) {
       return res.status(200).json({
@@ -178,6 +183,10 @@ exports.getStaffByCreator = async (req, res) => {
       mobile: user.mobile || 'N/A',
       joinDate: user.createdAt,
       status: user.status,
+      userId: user.userId,
+      lastLogin: user.lastLogin || 'N/A',
+      lastLogout: user.lastLogout || 'N/A',
+      isLoggedIn: user.isLoggedIn || false,
     }));
 
     return res.status(200).json({
@@ -445,6 +454,120 @@ exports.createLeave = async (req, res) => {
     return res.status(500).json({
       status: 'fail',
       message: error.message,
+    });
+  }
+};
+
+
+exports.editReceptionist = async (req, res) => {
+  try {
+    // Validate input
+    const { error } = editReceptionistSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        status: "fail",
+        message: error.details[0].message,
+      });
+    }
+
+    const { userId } = req.body; // Receptionist's userId to identify the record
+    const doctorId = req.headers.userid; // Doctor making the update
+
+    // Validate doctorId
+    if (!doctorId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Doctor ID is required in headers"
+      });
+    }
+
+    // Check if receptionist exists
+    const user = await Users.findOne({ userId });
+    if (!user) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Receptionist not found"
+      });
+    }
+
+    // Check if the receptionist was created by this doctor
+    if (user.createdBy !== doctorId) {
+      return res.status(403).json({
+        status: "fail",
+        message: "Not authorized to edit this receptionist"
+      });
+    }
+
+    // Check for duplicate mobile number (excluding current user)
+    if (req.body.mobile && req.body.mobile !== user.mobile) {
+      const mobileExists = await Users.findOne({
+        mobile: req.body.mobile,
+        userId: { $ne: userId } // Exclude the current user
+      });
+      if (mobileExists) {
+        return res.status(400).json({
+          status: "fail",
+          message: "Mobile number already in use by another user"
+        });
+      }
+    }
+
+    // Prepare update object
+    const updateData = {
+      updatedBy: doctorId,
+      updatedAt: new Date()
+    };
+
+    // Add fields to update if provided
+    if (req.body.firstName) updateData.firstName = req.body.firstName;
+    if (req.body.lastName) updateData.lastName = req.body.lastName;
+    if (req.body.email) updateData.email = req.body.email;
+    if (req.body.mobile) updateData.mobile = req.body.mobile;
+    if (req.body.gender) updateData.gender = req.body.gender;
+    if (req.body.DOB) updateData.DOB = req.body.DOB;
+    if (req.body.access) updateData.access = req.body.access;
+
+    // Handle profile picture update
+    if (req.file) {
+      const filePath = req.file.path;
+      const { mimeType, base64 } = convertImageToBase64(filePath);
+      updateData.profilepic = { mimeType, data: base64 };
+      fs.unlinkSync(filePath); // Clean up temporary file
+    }
+
+    // Update user in Users collection
+    const updatedUser = await Users.findOneAndUpdate(
+      { userId },
+      { $set: updateData },
+      { new: true }
+    );
+
+    // Update corresponding record in doctorReceptionist collection (if needed)
+    const updateReceptionistData = {};
+    if (req.body.firstName) updateReceptionistData.firstName = req.body.firstName;
+    if (req.body.lastName) updateReceptionistData.lastName = req.body.lastName;
+    if (req.file) updateReceptionistData.profilepic = updateData.profilepic;
+
+    if (Object.keys(updateReceptionistData).length > 0) {
+      updateReceptionistData.updatedBy = doctorId;
+      updateReceptionistData.updatedAt = new Date();
+      await doctorReceptionist.findOneAndUpdate(
+        { receptionistId: userId },
+        { $set: updateReceptionistData },
+        { new: true }
+      );
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Receptionist updated successfully",
+      data: updatedUser
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error"
     });
   }
 };

@@ -179,9 +179,9 @@ exports.deleteMyAccount = async (req, res) => {
         message: 'User not found',
       });
     }
-    res.status(204).json({
+    return res.status(200).json({
       status: 'success',
-      data: null,
+      message: 'Account marked as deleted',
     });
   } catch (error) {
     res.status(500).json({
