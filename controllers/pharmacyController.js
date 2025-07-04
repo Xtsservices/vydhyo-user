@@ -15,6 +15,28 @@ exports.addMedInventory = async (req, res) => {
   try {
     const { medName, price, quantity, doctorId } = req.body;
 
+    // Validate required fields
+    if (!medName || !price || !quantity || !doctorId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'All fields (medName, price, quantity, doctorId) are required'
+      });
+    }
+
+    // Check for existing medicine with same medName and doctorId
+    const existingMedicine = await medInventoryModel.findOne({
+      medName: { $regex: `^${medName}$`, $options: 'i' }, // Case-insensitive match
+      doctorId
+    });
+
+    if (existingMedicine) {
+      return res.status(409).json({
+        status: 'fail',
+        message: 'Medicine already exists for this doctor'
+      });
+    }
+
+
     // Create new medicine inventory entry
     const medInventory = new medInventoryModel({
       medName,
@@ -177,6 +199,58 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
     });
   }
 };
+
+exports.pharmacyPayment = async(req, res) => {
+
+  try {
+    const { patientId } = req.params;
+    const { userId, doctorId, amount, discount = 0, discountType, finalAmount, paymentStatus } = req.body;
+
+    // Validate required fields
+    if (!patientId || !userId || !doctorId || !amount || !finalAmount || !paymentStatus) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Missing required fields: patientId, userId, doctorId, amount, finalAmount, paymentStatus'
+      });
+    }
+
+    let paymentResponse;
+
+    // Process payment if paymentStatus is 'paid'
+    if (paymentStatus === 'paid') {
+      paymentResponse = await createPayment(req.headers.authorization, {
+        userId,
+        doctorId,
+        patientId,
+        actualAmount: amount,
+        discount,
+        discountType,
+        finalAmount,
+        paymentStatus: 'paid',
+        paymentFrom: 'pharmacy',
+      });
+
+      if (!paymentResponse || paymentResponse.status !== 'success') {
+        return res.status(500).json({
+          status: 'fail',
+          message: 'Payment failed.'
+        });
+      }
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: paymentResponse || null,
+      message: 'Pharmacy payment processed successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
 
 // exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
 //   try {
