@@ -122,10 +122,35 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       });
     }
 
-    // Aggregate tests by patientId for the given doctorId
+    // Aggregate tests by patientId for the given doctorId with price from Test collection
     const patients = await patientTestModel.aggregate([
       {
         $match: { doctorId } // Filter by doctorId
+      },
+      {
+        $lookup: {
+          from: 'tests', // Collection name in MongoDB (lowercase, pluralized by Mongoose)
+          let: { testName: "$testName", doctorId: "$doctorId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$testName", "$$testName"] },
+                    { $eq: ["$doctorId", "$$doctorId"] }
+                  ]
+                }
+              }
+            }
+          ],
+          as: 'testData'
+        }
+      },
+      {
+        $unwind: {
+          path: '$testData',
+          preserveNullAndEmptyArrays: true // Keep tests even if no matching test price
+        }
       },
       {
         $group: {
@@ -134,6 +159,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
             $push: {
               _id: "$_id",
               testName: "$testName",
+              price: { $ifNull: ["$testData.testPrice", null] }, // Include price or null if not found
               createdAt: "$createdAt"
             }
           }
@@ -143,8 +169,6 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
         $sort: { _id: 1 } // Sort by patientId for consistent output
       }
     ]);
-
-   
 
     res.status(200).json({
       status: 'success',
