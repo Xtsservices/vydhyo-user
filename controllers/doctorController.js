@@ -161,10 +161,12 @@ exports.getStaffByCreator = async (req, res) => {
       });
     }
 
+    const allowedRoles = ['lab-Assistant', 'pharmacy-Assistant', 'receptionist', 'assistent'];
     // Find all active staff created by the user from the User model
     const staff = await Users.find({
       createdBy: userId,
       isDeleted: false, // Exclude deleted users
+       role: { $in: allowedRoles } // Only include specified roles
     }).select('firstname lastname email role mobile createdAt status userId lastLogout isLoggedIn lastLogin');
 
     if (!staff || staff.length === 0) {
@@ -177,6 +179,8 @@ exports.getStaffByCreator = async (req, res) => {
 
     // Format the response to match requested fields
     const formattedStaff = staff.map(user => ({
+      firstname: user.firstname || 'N/A',
+      lastname: user.lastname || 'N/A',
       name: `${user.firstname || ''} ${user.lastname || ''}`.trim(),
       email: user.email || 'N/A',
       stafftype: user.role || 'receptionist',

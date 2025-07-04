@@ -10,7 +10,8 @@ const {
     updateSpecialization,
     updateConsultationModes,
     updateBankDetails,
-    getUsersByIds
+    getUsersByIds,
+    userSubmit
 } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
@@ -48,6 +49,11 @@ router.post('/addKYCDetails', upload.fields([
 ]), addKYCDetails);
 
 router.get('/getKYCDetails', getKYCDetails);
+
+
+// Route to send onboarding submission email
+router.post('/sendOnboardingEmail', userSubmit);
+
 
 
 module.exports = router;
