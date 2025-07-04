@@ -8,6 +8,71 @@ const consultationFeeSchema = require('../schemas/consultationFeeSchema');
 const bankDetailsSchema = require('../schemas/bankDetailsSchema');
 const { encrypt, decrypt } = require('../utils/encryptData');
 const { userAggregation } = require('../queryBuilder/userAggregate');
+const nodemailer = require('nodemailer');
+
+// Configure Nodemailer transporter
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'tech.vydhyo.in@gmail.com',
+        pass: process.env.EMAIL_PASSWORD // Store password in environment variable
+    }
+});
+
+// Function to send onboarding submission email
+const sendOnboardingEmail = async (user) => {
+    try {
+        const subject = 'Vydhyo: Your Onboarding Profile Has Been Submitted';
+        const html = `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Vydhyo Onboarding Submission</title>
+            </head>
+            <body style="margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f1f3f5; color: #333333;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <tr>
+                        <td style="padding: 40px 30px 20px;">
+                            <img src="https://ik.imagekit.io/bhnmoa9nt/TM.png?updatedAt=1751545962441" alt="Vydhyo Logo" style="display: block; margin: 0 auto 20px; max-width: 100px; height: auto; border-radius: 50%;">
+                            <h2 style="font-size: 24px; font-weight: 600; color: #1a1a1a; margin: 0 0 20px; text-align: center;">Onboarding Profile Submission</h2>
+                            <p style="font-size: 16px; line-height: 1.6; color: #4a4a4a; margin: 0 0 15px;">Dear Dr. ${user.firstname} ${user.lastname},</p>
+                            <p style="font-size: 16px; line-height: 1.6; color: #4a4a4a; margin: 0 0 15px;">Thank you for submitting your doctor profile for onboarding with Vydhyo.</p>
+                            <p style="font-size: 16px; line-height: 1.6; color: #4a4a4a; margin: 0 0 25px;">Your profile is now under review by our team. We will notify you once the review process is complete. This typically takes 2-3 business days.</p>
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 20px auto;">
+                                <tr>
+                                    <td style="border-radius: 6px; background-color: #28a745; padding: 0;">
+                                        <a href="https://vydhyo.in/login" style="display: inline-block; padding: 12px 30px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 6px;">Check Your Profile Status</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="font-size: 16px; line-height: 1.6; color: #4a4a4a; margin: 25px 0 0;">We appreciate your interest in joining Vydhyo and look forward to supporting your practice.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 20px 30px; text-align: center; background-color: #f8f9fa; border-top: 1px solid #e9ecef;">
+                            <p style="font-size: 14px; color: #6c757d; margin: 0 0 10px;">For assistance, contact us at <a href="mailto:support@vydhyo.in" style="color: #28a745; text-decoration: none;">support@vydhyo.in</a></p>
+                            <p style="font-size: 14px; color: #6c757d; margin: 0;">© ${new Date().getFullYear()} Vydhyo Healthcare. All rights reserved.</p>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `;
+
+        await transporter.sendMail({
+            from: '"Vydhyo Healthcare" <tech.vydhyo.in@gmail.com>',
+            to: 'pavanreddyr42@gmail.com', // Replace with user.email for production
+            subject: subject,
+            html: html
+        });
+        
+        console.log(`Onboarding email sent to pavanreddyr42@gmail.com`);
+    } catch (error) {
+        console.error('Error sending onboarding email:', error);
+    }
+};
 
 exports.getAllUsers = async (req, res) => {
   try {
@@ -420,3 +485,41 @@ exports.getUsersByIds = async (req, res) => {
     });
   }
 }
+
+
+exports.userSubmit = async (req, res) => {
+    try {
+        // Assuming userId is sent in the request body
+        const userId = req.body.userId || req.headers.userid;
+
+        if (!userId) {
+            return res.status(400).json({
+                status: 'fail',
+                message: 'userId is required'
+            });
+        }
+
+        // Find the user in the database
+        const user = await Users.findOne({ userId });
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'fail',
+                message: 'User not found'
+            });
+        }
+
+        // Send onboarding email
+        await sendOnboardingEmail(user);
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Onboarding email sent successfully'
+        });
+    } catch (error) {
+        return res.status(500).json({
+            status: 'fail',
+            message: error.message
+        });
+    }
+};
