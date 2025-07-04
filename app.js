@@ -7,7 +7,7 @@ const receptionistRouter = require('./routes/receptionistRouter')
 const superAdminRouter = require('./routes/superAdminRouter');
 const DoctorDashboardRouter = require('./routes/DoctorDashboardRouter');
 const addressRouter = require('./routes/addressRouter');
-
+const labRouter = require('./routes/labRouter')
 const bodyParser = require("body-parser");
 require('dotenv').config();
 const connectDB = require('./utils/db');
@@ -28,6 +28,7 @@ app.use('/receptionist', receptionistRouter);
 app.use('/superAdmin', superAdminRouter);
 app.use('/doctorDashboard', DoctorDashboardRouter);
 app.use('/address', addressRouter);
+app.use('/lab', labRouter);
 
 
 
