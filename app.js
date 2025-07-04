@@ -7,11 +7,13 @@ const receptionistRouter = require('./routes/receptionistRouter')
 const superAdminRouter = require('./routes/superAdminRouter');
 const DoctorDashboardRouter = require('./routes/DoctorDashboardRouter');
 const addressRouter = require('./routes/addressRouter');
+const PharmacyRouter = require('./routes/pharmacyRouter');
 
 const bodyParser = require("body-parser");
 require('dotenv').config();
 const connectDB = require('./utils/db');
 const logger = require('./utils/logger');
+const { P } = require('pino');
 
 // Middleware
 const app = express();
@@ -28,6 +30,7 @@ app.use('/receptionist', receptionistRouter);
 app.use('/superAdmin', superAdminRouter);
 app.use('/doctorDashboard', DoctorDashboardRouter);
 app.use('/address', addressRouter);
+app.use('/pharmacy', PharmacyRouter);
 
 
 
