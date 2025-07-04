@@ -40,7 +40,6 @@ exports.addMedInventory = async (req, res) => {
 }
 
 
-
 exports.addPrescription = async (req, res) => {
   try {
     const { patientId, doctorId, medicines, tests } = req.body;
@@ -54,32 +53,31 @@ exports.addPrescription = async (req, res) => {
     }
 
     // Save medicines if provided
-    const medicinePromises = medicines && medicines.length > 0
-      ? medicines.map(medicine => {
-          const { medInventoryId, medName, quantity } = medicine;
-          return new medicineModel({
-            medInventoryId: medInventoryId || null,
-            medName,
-            quantity,
-            patientId,
-            doctorId
-          }).save();
-        })
-      : [];
+    if (medicines && medicines.length > 0) {
+      for (const medicine of medicines) {
+        const { medInventoryId, medName, quantity } = medicine;
+        await new medicineModel({
+          medInventoryId: medInventoryId || null,
+          medName,
+          quantity,
+          patientId,
+          doctorId
+        }).save();
+      }
+    }
 
     // Save tests if provided
-    const testPromises = tests && tests.length > 0
-      ? tests.map(test => {
-          const { testName } = test;
-          return new patientTestModel({
-            testName,
-            patientId,
-            doctorId
-          }).save();
-        })
-      : [];
-
-    await Promise.all([...medicinePromises, ...testPromises]);
+    if (tests && tests.length > 0) {
+      for (const test of tests) {
+        const { testName , testInventortId} = test;
+        await new patientTestModel({
+          testInventortId: testInventortId || null,
+          testName,
+          patientId,
+          doctorId
+        }).save();
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -116,3 +114,116 @@ exports.getAllMedicinesByDoctorID = async (req, res) => {
   }
 }
 
+
+exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
+  try {
+    const doctorId = req.query.userid || req.headers.userid;
+
+    // Validate doctorId
+    if (!doctorId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Doctor ID is required'
+      });
+    }
+
+    // Aggregate medicines by patientId for the given doctorId with price from MedInventory
+    const patients = await medicineModel.aggregate([
+      {
+        $match: { doctorId } // Filter by doctorId
+      },
+      {
+        $lookup: {
+          from: 'medinventories', // Collection name in MongoDB (lowercase, pluralized by Mongoose)
+          localField: 'medInventoryId',
+          foreignField: '_id',
+          as: 'inventoryData'
+        }
+      },
+      {
+        $unwind: {
+          path: '$inventoryData',
+          preserveNullAndEmptyArrays: true // Keep medicines even if no matching inventory
+        }
+      },
+      {
+        $group: {
+          _id: "$patientId", // Group by patientId
+          medicines: {
+            $push: {
+              _id: "$_id",
+              medName: "$medName",
+              quantity: "$quantity",
+              medInventoryId: "$medInventoryId",
+              price: { $ifNull: ["$inventoryData.price", null] }, // Include price or null if not found
+              createdAt: "$createdAt"
+            }
+          }
+        }
+      },
+      {
+        $sort: { _id: 1 } // Sort by patientId for consistent output
+      }
+    ]);
+
+    res.status(200).json({
+      status: 'success',
+      data: patients || []
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+// exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
+//   try {
+//     const doctorId =  req.query.userid || req.headers.userid 
+
+//     // Validate doctorId
+//     if (!doctorId) {
+//       return res.status(400).json({
+//         status: 'fail',
+//         message: 'Doctor ID is required'
+//       });
+//     }
+
+//     // Aggregate medicines by patientId for the given doctorId
+//     const patients = await medicineModel.aggregate([
+//       {
+//         $match: { doctorId } // Filter by doctorId
+//       },
+//       {
+//         $group: {
+//           _id: "$patientId", // Group by patientId
+//           medicines: {
+//             $push: {
+//               _id: "$_id",
+//               medName: "$medName",
+//               quantity: "$quantity",
+//               medInventoryId: "$medInventoryId",
+//               createdAt: "$createdAt"
+//             }
+//           }
+//         }
+//       },
+//       {
+//         $sort: { _id: 1 } // Sort by patientId for consistent output
+//       }
+//     ]);
+
+    
+
+//     res.status(200).json({
+//       status: 'success',
+//       data: patients || []
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       status: 'fail',
+//       message: error.message
+//     });
+//   }
+// };
