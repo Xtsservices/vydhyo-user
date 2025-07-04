@@ -1,4 +1,5 @@
 const User = require('../models/usersModel');
+const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const UserAddress = require('../models/addressModel');
 const addressValidationSchema = require('../schemas/addressSchema');
@@ -8,6 +9,7 @@ const axios = require('axios');
 const medInventoryModel = require('../models/medInventoryModel');
 const medicineModel = require('../models/medicineModel');
 const patientTestModel = require('../models/patientTestModel');
+const { prescriptionValidationSchema } = require('../schemas/prescriptionValidation');
 dotenv.config();
 
 
@@ -61,29 +63,37 @@ exports.addMedInventory = async (req, res) => {
   }
 }
 
-
 exports.addPrescription = async (req, res) => {
   try {
-    const { patientId, doctorId, medicines, tests } = req.body;
+    // Validate input using Joi
+    const { error, value } = prescriptionValidationSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true
+    });
 
-    // Validate input
-    if (!patientId || !doctorId) {
+    if (error) {
+      const errorMessages = error.details.map(detail => detail.message);
       return res.status(400).json({
         status: 'fail',
-        message: 'Patient ID and Doctor ID are required'
+        message: 'Validation failed',
+        errors: errorMessages
       });
     }
+
+    const { patientId, doctorId, medicines, tests } = value;
 
     // Save medicines if provided
     if (medicines && medicines.length > 0) {
       for (const medicine of medicines) {
         const { medInventoryId, medName, quantity } = medicine;
         await new medicineModel({
-          medInventoryId: medInventoryId || null,
+          medInventoryId: medInventoryId ? medInventoryId : null,
           medName,
           quantity,
           patientId,
-          doctorId
+          doctorId,
+          createdBy: req.user?._id,
+          updatedBy: req.user?._id
         }).save();
       }
     }
@@ -91,12 +101,14 @@ exports.addPrescription = async (req, res) => {
     // Save tests if provided
     if (tests && tests.length > 0) {
       for (const test of tests) {
-        const { testName , testInventortId} = test;
+        const { testInventoryId, testName } = test;
         await new patientTestModel({
-          testInventortId: testInventortId || null,
+          testInventoryId: testInventoryId ? testInventoryId: null,
           testName,
           patientId,
-          doctorId
+          doctorId,
+          createdBy: req.user?._id,
+          updatedBy: req.user?._id
         }).save();
       }
     }
@@ -106,6 +118,14 @@ exports.addPrescription = async (req, res) => {
       message: 'Prescription added successfully'
     });
   } catch (error) {
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Duplicate prescription entry detected'
+      });
+    }
+
     res.status(500).json({
       status: 'fail',
       message: error.message
