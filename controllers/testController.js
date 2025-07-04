@@ -1,6 +1,7 @@
 const Test = require('../models/testModel');
 const Joi = require('joi');
 const { addTestSchema, getTestsSchema } = require('../schemas/testSchema');
+const patientTestModel = require('../models/patientTestModel');
 
 // Add a new test to the testTable collection
 const addTest = async (req, res) => {
@@ -109,4 +110,52 @@ const getTestsByDoctorId = async (req, res) => {
   }
 };
 
-module.exports = { addTest, getTestsByDoctorId };
+const getAllTestsPatientsByDoctorID = async (req, res) => {
+  try {
+    const doctorId = req.query.userid || req.headers.userid;
+
+    // Validate doctorId
+    if (!doctorId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Doctor ID is required'
+      });
+    }
+
+    // Aggregate tests by patientId for the given doctorId
+    const patients = await patientTestModel.aggregate([
+      {
+        $match: { doctorId } // Filter by doctorId
+      },
+      {
+        $group: {
+          _id: "$patientId", // Group by patientId
+          tests: {
+            $push: {
+              _id: "$_id",
+              testName: "$testName",
+              createdAt: "$createdAt"
+            }
+          }
+        }
+      },
+      {
+        $sort: { _id: 1 } // Sort by patientId for consistent output
+      }
+    ]);
+
+   
+
+    res.status(200).json({
+      status: 'success',
+      data: patients || []
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+module.exports = { addTest, getTestsByDoctorId , getAllTestsPatientsByDoctorID};
