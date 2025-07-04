@@ -31,6 +31,6 @@ const testSchema = new mongoose.Schema({
 // Index for efficient querying by doctorId and createdAt
 testSchema.index({ doctorId: 1, createdAt: -1 });
 
-const Test = mongoose.model('Test', testSchema);
+const TestInventory = mongoose.model('TestInventory', testSchema);
 
-module.exports = Test;
+module.exports = TestInventory;
