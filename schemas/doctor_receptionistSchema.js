@@ -38,8 +38,10 @@ const receptionistSchema = Joi.object({
 // Joi schema for editing receptionist (all fields optional except userId)
 const editReceptionistSchema = Joi.object({
   userId: Joi.string().required(), // Required to identify the receptionist
-  firstName: Joi.string().min(2).max(50).optional(),
-  lastName: Joi.string().min(1).max(50).optional(),
+  role: Joi.string().required(),
+  stafftype: Joi.string().required(),
+  firstname: Joi.string().min(2).max(50).optional(),
+  lastname: Joi.string().min(1).max(50).optional(),
   email: Joi.string().email().lowercase().trim().max(100).optional(),
   mobile: Joi.string()
     .pattern(/^[0-9]{10,15}$/)

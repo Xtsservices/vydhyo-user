@@ -151,7 +151,7 @@ exports.createPatient = async (req, res) => {
 
 exports.getStaffByCreator = async (req, res) => {
   try {
-    const userId = req.headers.userid;
+    const userId = req.params.userid;
 
     // Validate that userId exists in headers
     if (!userId) {
@@ -165,9 +165,9 @@ exports.getStaffByCreator = async (req, res) => {
     // Find all active staff created by the user from the User model
     const staff = await Users.find({
       createdBy: userId,
+      role: { $ne: "patient" },
       isDeleted: false, // Exclude deleted users
-       role: { $in: allowedRoles } // Only include specified roles
-    }).select('firstname lastname email role mobile createdAt status userId lastLogout isLoggedIn lastLogin');
+    }).select('firstname lastname email role mobile createdAt status userId lastLogout isLoggedIn lastLogin access DOB gender');
 
     if (!staff || staff.length === 0) {
       return res.status(200).json({
@@ -191,6 +191,9 @@ exports.getStaffByCreator = async (req, res) => {
       lastLogin: user.lastLogin || 'N/A',
       lastLogout: user.lastLogout || 'N/A',
       isLoggedIn: user.isLoggedIn || false,
+      DOB:user.DOB,
+      access:user.access,
+      gender:user.gender
     }));
 
     return res.status(200).json({
@@ -466,6 +469,7 @@ exports.createLeave = async (req, res) => {
 exports.editReceptionist = async (req, res) => {
   try {
     // Validate input
+    console.log("req.body",req.body)
     const { error } = editReceptionistSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
@@ -523,15 +527,16 @@ exports.editReceptionist = async (req, res) => {
     };
 
     // Add fields to update if provided
-    if (req.body.firstName) updateData.firstName = req.body.firstName;
-    if (req.body.lastName) updateData.lastName = req.body.lastName;
+    if (req.body.firstname) updateData.firstname = req.body.firstname;
+    if (req.body.lastname) updateData.lastname = req.body.lastname;
     if (req.body.email) updateData.email = req.body.email;
     if (req.body.mobile) updateData.mobile = req.body.mobile;
     if (req.body.gender) updateData.gender = req.body.gender;
     if (req.body.DOB) updateData.DOB = req.body.DOB;
     if (req.body.access) updateData.access = req.body.access;
+    if (req.body.role) updateData.role = req.body.role;
 
-    // Handle profile picture update
+    // Handle profile picture update 
     if (req.file) {
       const filePath = req.file.path;
       const { mimeType, base64 } = convertImageToBase64(filePath);
@@ -539,6 +544,8 @@ exports.editReceptionist = async (req, res) => {
       fs.unlinkSync(filePath); // Clean up temporary file
     }
 
+    console.log("userId",userId)
+    console.log("userId 2",updateData)
     // Update user in Users collection
     const updatedUser = await Users.findOneAndUpdate(
       { userId },

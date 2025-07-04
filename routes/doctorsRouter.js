@@ -10,7 +10,7 @@ router.post("/createReceptionist", upload.single('profilePic'), createReceptioni
 router.get("/searchUser", searchAndFetchUser);
 router.post("/createPatient", createPatient);
 // Route definition
-router.get("/getStaffByCreator", getStaffByCreator);
+router.get("/getStaffByCreator/:userid", getStaffByCreator);
 router.post("/createSchedule", createSchedule);
 router.post("/createLeave", createLeave);
 router.get("/getSchedulesAndLeaves", getSchedulesAndLeaves);

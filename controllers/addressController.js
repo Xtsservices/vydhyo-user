@@ -12,6 +12,7 @@ exports.addAddress = async (req, res) => {
   try {
     const userId = req.body.userId || req.headers.userid;
     req.body.userId = userId;
+    console.log('req.body', req.body);
     const { error } = addressValidationSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
@@ -28,7 +29,8 @@ exports.addAddress = async (req, res) => {
     req.body.updatedAt = new Date();
     const userAddress = await UserAddress.create(req.body);
     return res.status(201).json({
-      status: 'success',
+      status: 200,
+      message:"success",
       data: userAddress
     });
   } catch (error) {
@@ -60,6 +62,29 @@ exports.getAddress = async (req, res) => {
       data: userAddress.length > 1 ? userAddress : userAddress[0],
     });
   } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+}
+
+exports.getClinicAddress = async (req, res) => {
+  try { 
+    const userId = req.headers.userid;
+    const userAddress = await UserAddress.find({userId});
+    if (!userAddress || userAddress.length === 0) { 
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No clinic or hospital address found for this user',
+      });
+    }
+    return res.status(200).json({
+      status: 'success',
+      data: userAddress
+    });
+    
+  } catch (error) { 
     return res.status(500).json({
       status: 'fail',
       message: error.message,
