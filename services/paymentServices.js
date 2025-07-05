@@ -7,7 +7,7 @@ const FINANCE_SERVICE_BASE_URL = process.env.FINANCE_SERVICE_URL;
 async function createPayment(authHeader, bodyParams) {
   try {
     const response = await axios.post(
-      `${FINANCE_SERVICE_BASE_URL}/finance/createPharmacyPayment`,
+      `${FINANCE_SERVICE_BASE_URL}/finance/createPayment`,
       bodyParams,
       {
         headers: {
