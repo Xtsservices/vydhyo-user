@@ -1,4 +1,6 @@
 const User = require('../models/usersModel');
+const Joi = require('joi');
+
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const UserAddress = require('../models/addressModel');
