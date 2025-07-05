@@ -170,7 +170,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
               select: "testName testPrice",
             }
           ])
-          .select("testName status createdAt testInventoryId");
+          .select("testName status createdAt testInventoryId labTestID _id");
 
         // Fetch medicines for the patient
         const medicines = await Medicine.find({
@@ -183,7 +183,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             model: MedInventory,
             select: "medName price",
           })
-          .select("medName quantity status createdAt medInventoryId");
+          .select("medName quantity status createdAt medInventoryId pharmacyMedID _id");
 
         // Format patient data
         return {
@@ -196,12 +196,16 @@ exports.fetchMyDoctorPatients = async (req, res) => {
           gender: patient.gender,
           bloodgroup: patient.bloodgroup,
           tests: tests.map((test) => ({
+            testId: test._id, // Include MongoDB _id
+            labTestID: test.labTestID,
             testName: test.testName,
             status: test.status,
             price: test.testInventoryId ? test.testInventoryId.testPrice : null,
             createdAt: test.createdAt,
           })),
           medicines: medicines.map((medicine) => ({
+            medicineId: medicine._id, // Include MongoDB _id
+            pharmacyMedID: medicine.pharmacyMedID,
             medName: medicine.medName,
             quantity: medicine.quantity,
             status: medicine.status,
