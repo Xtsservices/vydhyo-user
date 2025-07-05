@@ -236,6 +236,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
   }
 };
 
+
 const updatePatientTestPrice = async (req, res) => {
   try {
     // Validate request body
@@ -244,6 +245,7 @@ const updatePatientTestPrice = async (req, res) => {
       patientId: Joi.string().required(),
       price: Joi.number().min(0).required(),
       doctorId: Joi.string().required(),
+      testName: Joi.string().trim().min(2).max(100).required(),
     }).validate(req.body);
 
     if (error) {
@@ -253,9 +255,10 @@ const updatePatientTestPrice = async (req, res) => {
       });
     }
 
-    const { testId, patientId, price, doctorId } = req.body;
+    const { testId, patientId, price, doctorId, testName } = req.body;
+    const trimmedTestName = testName.trim();
 
-    // Verify patient exists
+    // Step 1: Verify patient exists
     const patient = await Users.findOne({ userId: patientId });
     if (!patient) {
       return res.status(404).json({
@@ -264,42 +267,38 @@ const updatePatientTestPrice = async (req, res) => {
       });
     }
 
-    // Check if test exists in TestInventory
-    let test = await TestInventory.findById(testId);
-    if (!test) {
-      // Fallback: get test name from patient test
-      const patientTest = await patientTestModel.findOne({
-        _id: testId,
-        patientId,
-      });
-      if (!patientTest) {
-        return res.status(404).json({
-          status: "error",
-          message: "Patient test record not found",
-        });
-      }
-
-      // Add test to inventory
-      test = await TestInventory.create({
-        testName: patientTest.testName || `Test-${testId}`,
-        testPrice: price,
-        doctorId,
-      });
-    }
-
-    // Update the price in patient test
-    const updatedPatientTest = await patientTestModel.findOneAndUpdate(
-      { _id: testId, patientId },
-      { $set: { price } },
-      { new: true }
-    );
-
-    if (!updatedPatientTest) {
+    // Step 2: Find the patient test
+    const patientTest = await patientTestModel.findOne({ _id: testId, patientId });
+    if (!patientTest) {
       return res.status(404).json({
         status: "error",
         message: "Patient test record not found",
       });
     }
+
+    // Step 3: Check if testName exists in TestInventory
+    let test = await TestInventory.findOne({ testName: trimmedTestName });
+
+    // Step 4: If not found, create new test in inventory
+    if (!test) {
+      test = await TestInventory.create({
+        testName: trimmedTestName,
+        testPrice: price,
+        doctorId,
+      });
+    }
+
+    // Step 5: Update the patient test record with price and inventory reference
+    const updatedPatientTest = await patientTestModel.findOneAndUpdate(
+      { _id: testId, patientId },
+      {
+        $set: {
+          price,
+          testInventoryId: patientTest.testInventoryId || test._id, // only set if not already set
+        },
+      },
+      { new: true }
+    );
 
     return res.status(200).json({
       status: "success",
@@ -314,6 +313,8 @@ const updatePatientTestPrice = async (req, res) => {
     });
   }
 };
+
+
 
 const processPayment = async (req, res) => {
   try {
@@ -341,7 +342,15 @@ const processPayment = async (req, res) => {
       });
     }
 
-    const { patientId, doctorId, amount, tests, paymentStatus = 'paid', discount, discountType } = req.body;
+    const {
+      patientId,
+      doctorId,
+      amount,
+      tests,
+      paymentStatus = "paid",
+      discount,
+      discountType,
+    } = req.body;
 
     // Step 2: Optional - Verify patient exists
     const patientExists = await Users.findOne({ userId: patientId });
@@ -355,14 +364,12 @@ const processPayment = async (req, res) => {
     const updatedTests = [];
 
     for (const test of tests) {
-      const { testId, price,labTestID } = test;
-    
+      const { testId, price, labTestID } = test;
+
       const updateData = {
         updatedAt: new Date(),
         status: price || price === 0 ? "completed" : "cancelled",
       };
-
-    
 
       // Only set price if it's a valid number
       if (typeof price === "number" && price >= 0) {
@@ -379,31 +386,27 @@ const processPayment = async (req, res) => {
         updatedTests.push(updated);
       }
 
-        // Process payment if paymentStatus is 'paid'
-    if (paymentStatus === 'paid' && updateData.status === 'completed') {
-      paymentResponse = await createPayment(req.headers.authorization, {
-        userId:patientId,
-        doctorId,
-        labTestID,
-        actualAmount: amount,
-        discount:discount || 0,
-        discountType: discountType || 'percentage',
-        paymentStatus: 'paid',
-        paymentFrom: 'lab',
-      });
-
-      if (!paymentResponse || paymentResponse.status !== 'success') {
-        return res.status(500).json({
-          status: 'fail',
-          message: 'Payment failed.'
+      // Process payment if paymentStatus is 'paid'
+      if (paymentStatus === "paid" && updateData.status === "completed") {
+        paymentResponse = await createPayment(req.headers.authorization, {
+          userId: patientId,
+          doctorId,
+          labTestID,
+          actualAmount: amount,
+          discount: discount || 0,
+          discountType: discountType || "percentage",
+          paymentStatus: "paid",
+          paymentFrom: "lab",
         });
+
+        if (!paymentResponse || paymentResponse.status !== "success") {
+          return res.status(500).json({
+            status: "fail",
+            message: "Payment failed.",
+          });
+        }
       }
     }
-    
-    }
-
-    
-
 
     return res.status(200).json({
       status: "success",

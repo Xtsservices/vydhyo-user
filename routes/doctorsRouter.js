@@ -6,7 +6,7 @@ const { createReceptionist, createPatient, searchAndFetchUser, getStaffByCreator
 const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporarily
 
 //Routes for approve Doctors
-router.post("/createReceptionist", upload.single('profilePic'), createReceptionist);
+router.post("/createReceptionist/:userid", upload.single('profilePic'), createReceptionist);
 router.get("/searchUser", searchAndFetchUser);
 router.post("/createPatient", createPatient);
 // Route definition
