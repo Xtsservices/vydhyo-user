@@ -41,6 +41,10 @@ const doctorReceptionistAssignmentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  access: {
+    type: Array,
+    default: []
+  }
 });
 
 module.exports = mongoose.model(
