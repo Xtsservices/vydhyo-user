@@ -9,6 +9,6 @@ router.post("/addMedInventory", addMedInventory);
 router.post('/addPrescription', addPrescription);
 router.get("/getAllMedicinesByDoctorID", getAllMedicinesByDoctorID);
 router.get("/getAllPharmacyPatientsByDoctorID", getAllPharmacyPatientsByDoctorID);
-router.get("/pharmacyPayment/:patientId", pharmacyPayment);
+router.post("/pharmacyPayment/:patientId", pharmacyPayment);
 
 module.exports = router;

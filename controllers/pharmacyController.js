@@ -10,6 +10,7 @@ const medInventoryModel = require('../models/medInventoryModel');
 const medicineModel = require('../models/medicineModel');
 const patientTestModel = require('../models/patientTestModel');
 const { prescriptionValidationSchema } = require('../schemas/prescriptionValidation');
+const { createPayment } = require('../services/paymentServices');
 dotenv.config();
 
 
@@ -224,10 +225,10 @@ exports.pharmacyPayment = async(req, res) => {
 
   try {
     const { patientId } = req.params;
-    const { userId, doctorId, amount, discount = 0, discountType, finalAmount, paymentStatus } = req.body;
+    const { userId, doctorId, amount, discount = 0, discountType, paymentStatus } = req.body;
 
     // Validate required fields
-    if (!patientId || !userId || !doctorId || !amount || !finalAmount || !paymentStatus) {
+    if (!patientId || !userId || !doctorId || !amount  || !paymentStatus) {
       return res.status(400).json({
         status: 'fail',
         message: 'Missing required fields: patientId, userId, doctorId, amount, finalAmount, paymentStatus'
@@ -245,7 +246,6 @@ exports.pharmacyPayment = async(req, res) => {
         actualAmount: amount,
         discount,
         discountType,
-        finalAmount,
         paymentStatus: 'paid',
         paymentFrom: 'pharmacy',
       });
