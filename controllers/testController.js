@@ -356,7 +356,7 @@ const processPayment = async (req, res) => {
 
     for (const test of tests) {
       const { testId, price,labTestID } = test;
-    
+
       const updateData = {
         updatedAt: new Date(),
         status: price || price === 0 ? "completed" : "cancelled",
@@ -379,26 +379,26 @@ const processPayment = async (req, res) => {
         updatedTests.push(updated);
       }
 
-        // Process payment if paymentStatus is 'paid'
+      // Process payment if paymentStatus is 'paid'
     if (paymentStatus === 'paid' && updateData.status === 'completed') {
-      paymentResponse = await createPayment(req.headers.authorization, {
+        paymentResponse = await createPayment(req.headers.authorization, {
         userId:patientId,
-        doctorId,
-        labTestID,
-        actualAmount: amount,
+          doctorId,
+          labTestID,
+          actualAmount: amount,
         discount:discount || 0,
         discountType: discountType || 'percentage',
         paymentStatus: 'paid',
         paymentFrom: 'lab',
-      });
+        });
 
       if (!paymentResponse || paymentResponse.status !== 'success') {
-        return res.status(500).json({
+          return res.status(500).json({
           status: 'fail',
           message: 'Payment failed.'
-        });
+          });
+        }
       }
-    }
     
     }
 
@@ -424,10 +424,30 @@ const processPayment = async (req, res) => {
   }
 };
 
+const getpatientTestDetails = async (req, res) => {
+  try {
+    const { labTestID } = req.query;
+
+    const patientTestDetils = await patientTestModel.findOne({ labTestID });
+    return res.status(200).json({
+      status: "success",
+      message: "Patient Test Details",
+      data: patientTestDetils,
+    });
+  } catch (err) {
+    console.error("Error in patientTestDetails:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
   addTest,
   getTestsByDoctorId,
   getAllTestsPatientsByDoctorID,
   updatePatientTestPrice,
   processPayment,
+  getpatientTestDetails
 };
