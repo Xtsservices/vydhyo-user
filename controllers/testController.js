@@ -205,6 +205,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
               price: { $ifNull: ["$testData.testPrice", null] },
               status: "$status", // Include status
               createdAt: "$createdAt",
+              labTestID: "$labTestID",
             },
           },
         },
@@ -326,6 +327,7 @@ const processPayment = async (req, res) => {
           Joi.object({
             testId: Joi.string().required(),
             price: Joi.number().min(0).allow(null), // allow null/missing
+            labTestID: Joi.string().allow(null),
           })
         )
         .required()
@@ -353,24 +355,14 @@ const processPayment = async (req, res) => {
     const updatedTests = [];
 
     for (const test of tests) {
-      const { testId, price } = test;
-      // Step 4: Generate appointmentId first (before calling payment API)
-      
-    const testCounter = await Counter.findByIdAndUpdate(
-      { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-      const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(testCounter.seq);
-
+      const { testId, price,labTestID } = test;
+    
       const updateData = {
         updatedAt: new Date(),
         status: price || price === 0 ? "completed" : "cancelled",
       };
 
-      if(updateData.status === "completed") {
-        updateData.labTestID = labTestID; // Add labTestID only if status is completed
-      }
+    
 
       // Only set price if it's a valid number
       if (typeof price === "number" && price >= 0) {
@@ -388,7 +380,7 @@ const processPayment = async (req, res) => {
       }
 
         // Process payment if paymentStatus is 'paid'
-    if (paymentStatus === 'paid') {
+    if (paymentStatus === 'paid' && updateData.status === 'completed') {
       paymentResponse = await createPayment(req.headers.authorization, {
         userId:patientId,
         doctorId,
