@@ -9,7 +9,7 @@ router.post("/addMedInventory", addMedInventory);
 router.post('/addPrescription', addPrescription);
 router.get("/getAllMedicinesByDoctorID", getAllMedicinesByDoctorID);
 router.get("/getAllPharmacyPatientsByDoctorID", getAllPharmacyPatientsByDoctorID);
-router.post("/pharmacyPayment/:patientId", pharmacyPayment);
+router.post("/pharmacyPayment", pharmacyPayment);
 router.post("/updatePatientMedicinePrice", updatePatientMedicinePrice);
 
 
