@@ -111,3 +111,7 @@ exports.fetchMyDoctors = async (req, res) => {
     });
   }
 };
+
+exports.fetchMyDoctorPatients = async (req,res) =>{
+  
+}
