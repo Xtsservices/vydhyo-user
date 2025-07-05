@@ -1,4 +1,6 @@
 const User = require('../models/usersModel');
+const Joi = require('joi');
+
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const UserAddress = require('../models/addressModel');
@@ -327,7 +329,6 @@ exports.pharmacyPayment = async(req, res) => {
   }
 };
 
-
 exports.updatePatientMedicinePrice = async (req, res) => {
   try {
     // Validate request body
@@ -336,74 +337,108 @@ exports.updatePatientMedicinePrice = async (req, res) => {
       patientId: Joi.string().required(),
       price: Joi.number().min(0).required(),
       doctorId: Joi.string().required(),
-    }).validate(req.body);
+    }).validate(req.body, { abortEarly: false });
 
     if (error) {
       return res.status(400).json({
-        status: 'error',
-        message: error.details[0].message,
+        status: 'fail',
+        message: 'Validation failed',
+        errors: error.details.map(detail => detail.message),
       });
     }
 
     const { medicineId, patientId, price, doctorId } = req.body;
 
     // Verify patient exists
-    const patient = await Users.findOne({ userId: patientId });
+    const patient = await User.findOne({ userId: patientId });
     if (!patient) {
       return res.status(404).json({
-        status: 'error',
+        status: 'fail',
         message: 'Patient not found',
       });
     }
 
-    // Check if medicine exists in MedInventory
-    let medicine = await MedInventory.findById(medicineId);
+    // Check if medicine exists in Medicine model
+    let medicine = await medicineModel.findOne({
+      _id: medicineId,
+      patientId,
+      doctorId,
+      isDeleted: false,
+      status: { $ne: 'cancelled' }
+    });
+
     if (!medicine) {
-      // Fallback: get medicine name from Medicine model
-      const patientMedicine = await Medicine.findOne({
-        _id: medicineId,
-        patientId,
-      });
-      if (!patientMedicine) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Patient medicine record not found',
-        });
-      }
-
-      // Add medicine to inventory
-      medicine = await MedInventory.create({
-        medName: patientMedicine.medName || `Medicine-${medicineId}`,
-        price,
-        quantity: patientMedicine.quantity || 1, // Default to 1 if quantity is not available
-        doctorId,
-      });
-    }
-
-    // Update the price in patient medicine
-    const updatedPatientMedicine = await Medicine.findOneAndUpdate(
-      { _id: medicineId, patientId },
-      { $set: { price } },
-      { new: true }
-    );
-
-    if (!updatedPatientMedicine) {
       return res.status(404).json({
-        status: 'error',
+        status: 'fail',
         message: 'Patient medicine record not found',
       });
     }
 
+    // Check if medicine exists in MedInventory
+    let medInventory = await medInventoryModel.findOne({
+      medName: medicine.medName,
+      doctorId
+    });
+
+    if (!medInventory) {
+      // Create new inventory entry if it doesn't exist
+      medInventory = await medInventoryModel.create({
+        medName: medicine.medName,
+        price,
+        quantity: medicine.quantity,
+        doctorId
+      });
+
+      // Update medicine with new medInventoryId
+      await medicineModel.findByIdAndUpdate(
+        medicineId,
+        { $set: { medInventoryId: medInventory._id } },
+        { new: true }
+      );
+    } else {
+      // Update existing inventory price
+      medInventory = await medInventoryModel.findByIdAndUpdate(
+        medInventory._id,
+        { $set: { price } },
+        { new: true }
+      );
+    }
+
+    // Update price in medicine record
+    const updatedMedicine = await medicineModel.findByIdAndUpdate(
+      medicineId,
+      { 
+        $set: { 
+          price,
+          updatedBy: req.user?._id,
+          updatedAt: Date.now()
+        }
+      },
+      { new: true }
+    );
+
     return res.status(200).json({
       status: 'success',
       message: 'Price updated successfully',
-      data: updatedPatientMedicine,
+      data: {
+        medicine: updatedMedicine,
+        inventory: medInventory
+      },
     });
   } catch (error) {
     console.error('Error updating medicine price:', error);
+    
+    // Handle specific errors
+    if (error.code === 11000) {
+      return res.status(409).json({
+        status: 'fail',
+        message: 'Duplicate medicine entry detected'
+      });
+    }
+
     return res.status(500).json({
-      status: 'error',
-      message: 'Internal server error',
+      status: 'fail',
+      message: 'Internal server error'
     });
   }
 };
