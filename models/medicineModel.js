@@ -7,6 +7,10 @@ const medicineSchema = new mongoose.Schema(
       ref: 'MedInventory',
       required: false, // Optional, manual entry allowed
     },
+    pharmacyMedID:{
+type: String,
+		unique: true
+    },
     medName: {
       type: String,
       required: [true, 'Medicine name is required'],

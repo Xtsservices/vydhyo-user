@@ -4,6 +4,8 @@ const { addTestSchema, getTestsSchema } = require("../schemas/testSchema");
 const patientTestModel = require("../models/patientTestModel");
 const Users = require("../models/usersModel");
 const { createPayment } = require("../services/paymentServices");
+const PREFIX_SEQUENCE = require("../utils/constants");
+const Counter = require("../sequence/sequenceSchema");
 
 // Add a new test to the testTable collection
 const addTest = async (req, res) => {
@@ -352,11 +354,23 @@ const processPayment = async (req, res) => {
 
     for (const test of tests) {
       const { testId, price } = test;
+      // Step 4: Generate appointmentId first (before calling payment API)
+      
+    const testCounter = await Counter.findByIdAndUpdate(
+      { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+      const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(testCounter.seq);
 
       const updateData = {
         updatedAt: new Date(),
         status: price || price === 0 ? "completed" : "cancelled",
       };
+
+      if(updateData.status === "completed") {
+        updateData.labTestID = labTestID; // Add labTestID only if status is completed
+      }
 
       // Only set price if it's a valid number
       if (typeof price === "number" && price >= 0) {
@@ -372,13 +386,13 @@ const processPayment = async (req, res) => {
       if (updated) {
         updatedTests.push(updated);
       }
-    }
 
-      // Process payment if paymentStatus is 'paid'
+        // Process payment if paymentStatus is 'paid'
     if (paymentStatus === 'paid') {
       paymentResponse = await createPayment(req.headers.authorization, {
         userId:patientId,
         doctorId,
+        labTestID,
         actualAmount: amount,
         discount:discount || 0,
         discountType: discountType || 'percentage',
@@ -393,6 +407,10 @@ const processPayment = async (req, res) => {
         });
       }
     }
+    
+    }
+
+    
 
 
     return res.status(200).json({

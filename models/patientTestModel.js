@@ -9,6 +9,10 @@ const patientTestSchema = new mongoose.Schema(
       minlength: [2, "Test name must be at least 2 characters long"],
       maxlength: [100, "Test name cannot exceed 100 characters"],
     },
+    labTestID: {
+		type: String,
+		unique: true
+	},
     testInventoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "TestInventory",
