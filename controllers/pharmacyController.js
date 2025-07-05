@@ -13,6 +13,8 @@ const medicineModel = require('../models/medicineModel');
 const patientTestModel = require('../models/patientTestModel');
 const { prescriptionValidationSchema } = require('../schemas/prescriptionValidation');
 const { createPayment } = require('../services/paymentServices');
+const PREFIX_SEQUENCE = require('../utils/constants');
+const Counter = require('../sequence/sequenceSchema');
 dotenv.config();
 
 
@@ -89,10 +91,20 @@ exports.addPrescription = async (req, res) => {
     if (medicines && medicines.length > 0) {
       for (const medicine of medicines) {
         const { medInventoryId, medName, quantity } = medicine;
+
+        const medCounter = await Counter.findByIdAndUpdate(
+      { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+      const pharmacyMedID = PREFIX_SEQUENCE.MEDICINES_SEQUENCE.SEQUENCE.concat(medCounter.seq);
+
+
         await new medicineModel({
           medInventoryId: medInventoryId ? medInventoryId : null,
           medName,
           quantity,
+          pharmacyMedID,
           patientId,
           doctorId,
           createdBy: req.user?._id,
@@ -105,10 +117,19 @@ exports.addPrescription = async (req, res) => {
     if (tests && tests.length > 0) {
       for (const test of tests) {
         const { testInventoryId, testName } = test;
+
+          const testCounter = await Counter.findByIdAndUpdate(
+      { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+      const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(testCounter.seq);
+
         await new patientTestModel({
           testInventoryId: testInventoryId ? testInventoryId: null,
           testName,
           patientId,
+          labTestID,
           doctorId,
           createdBy: req.user?._id,
           updatedBy: req.user?._id
@@ -227,7 +248,8 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
               price: { $ifNull: ['$inventoryData.price', null] },
               quantity: '$quantity',
               status: '$status',
-              createdAt: '$createdAt'
+              createdAt: '$createdAt',
+              pharmacyMedID: '$pharmacyMedID' // Include pharmacyMedID
             }
           }
         }

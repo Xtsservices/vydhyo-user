@@ -11,6 +11,7 @@ const patientTestSchema = new mongoose.Schema(
     },
     labTestID: {
 		type: String,
+		required: true,
 		unique: true
 	},
     testInventoryId: {

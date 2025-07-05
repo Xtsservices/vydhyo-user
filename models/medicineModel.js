@@ -8,7 +8,8 @@ const medicineSchema = new mongoose.Schema(
       required: false, // Optional, manual entry allowed
     },
     pharmacyMedID:{
-type: String,
+    type: String,
+    required: true,
 		unique: true
     },
     medName: {
