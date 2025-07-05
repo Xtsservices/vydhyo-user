@@ -3,6 +3,14 @@ const PREFIX_SEQUENCE = {
     USER_MODEL: "USER",
     SEQUENCE: "VYDUSER",
   },
+  MEDICINES_SEQUENCE: {
+    MEDICINES_MODEL: "Medicine",
+    SEQUENCE: "VYDMED",
+  },
+  TESTS_SEQUENCE: {
+    TESTS_MODEL: "PatientTest",
+    SEQUENCE: "VYDTEST",
+  },
 };
 
 module.exports = PREFIX_SEQUENCE;
