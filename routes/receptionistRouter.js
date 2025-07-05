@@ -7,6 +7,6 @@ const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporaril
 
 router.get("/updateReceptionist", upload.single('profilePic'), updateReceptionist);
 router.get("/fetchMyDoctors", fetchMyDoctors);
-router.get("/fetchMyDoctorPatients", fetchMyDoctorPatients);
+router.get("/fetchMyDoctorPatients/:doctorId", fetchMyDoctorPatients);
 
 module.exports = router;
