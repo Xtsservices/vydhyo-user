@@ -3,6 +3,7 @@ const Joi = require("joi");
 const { addTestSchema, getTestsSchema } = require("../schemas/testSchema");
 const patientTestModel = require("../models/patientTestModel");
 const Users = require("../models/usersModel");
+const { createPayment } = require("../services/paymentServices");
 
 // Add a new test to the testTable collection
 const addTest = async (req, res) => {
@@ -336,7 +337,7 @@ const processPayment = async (req, res) => {
       });
     }
 
-    const { patientId, doctorId, amount, tests } = req.body;
+    const { patientId, doctorId, amount, tests, paymentStatus = 'paid', discount, discountType } = req.body;
 
     // Step 2: Optional - Verify patient exists
     const patientExists = await Users.findOne({ userId: patientId });
@@ -372,6 +373,27 @@ const processPayment = async (req, res) => {
         updatedTests.push(updated);
       }
     }
+
+      // Process payment if paymentStatus is 'paid'
+    if (paymentStatus === 'paid') {
+      paymentResponse = await createPayment(req.headers.authorization, {
+        userId:patientId,
+        doctorId,
+        actualAmount: amount,
+        discount:discount || 0,
+        discountType: discountType || 'percentage',
+        paymentStatus: 'paid',
+        paymentFrom: 'lab',
+      });
+
+      if (!paymentResponse || paymentResponse.status !== 'success') {
+        return res.status(500).json({
+          status: 'fail',
+          message: 'Payment failed.'
+        });
+      }
+    }
+
 
     return res.status(200).json({
       status: "success",

@@ -158,6 +158,8 @@ exports.getAllMedicinesByDoctorID = async (req, res) => {
 }
 
 
+
+
 exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
   try {
     const doctorId = req.query.userid || req.headers.userid;
@@ -173,11 +175,11 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
     // Aggregate medicines by patientId for the given doctorId with price from MedInventory
     const patients = await medicineModel.aggregate([
       {
-        $match: { doctorId } // Filter by doctorId
+        $match: { doctorId, isDeleted: false } // Filter by doctorId and non-deleted records
       },
       {
         $lookup: {
-          from: 'medinventories', // Collection name in MongoDB (lowercase, pluralized by Mongoose)
+          from: 'medinventories', // Collection name for MedInventory model
           localField: 'medInventoryId',
           foreignField: '_id',
           as: 'inventoryData'
@@ -190,22 +192,55 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
         }
       },
       {
+        $lookup: {
+          from: 'users', // Collection name for Users model
+          localField: 'patientId',
+          foreignField: 'userId', // Assuming 'userId' is the field in the users collection
+          as: 'userData'
+        }
+      },
+      {
+        $unwind: {
+          path: '$userData',
+          preserveNullAndEmptyArrays: true // Keep medicines even if no matching user
+        }
+      },
+      {
         $group: {
-          _id: "$patientId", // Group by patientId
+          _id: '$patientId', // Group by patientId
+          patientName: {
+            $first: {
+              $concat: [
+                { $ifNull: ['$userData.firstname', ''] },
+                ' ',
+                { $ifNull: ['$userData.lastname', ''] }
+              ]
+            }
+          },
+          doctorId: { $first: '$doctorId' }, // Include doctorId
           medicines: {
             $push: {
-              _id: "$_id",
-              medName: "$medName",
-              quantity: "$quantity",
-              medInventoryId: "$medInventoryId",
-              price: { $ifNull: ["$inventoryData.price", null] }, // Include price or null if not found
-              createdAt: "$createdAt"
+              _id: '$_id',
+              medName: '$medName',
+              price: { $ifNull: ['$inventoryData.price', null] },
+              quantity: '$quantity',
+              status: '$status',
+              createdAt: '$createdAt'
             }
           }
         }
       },
       {
-        $sort: { _id: 1 } // Sort by patientId for consistent output
+        $project: {
+          patientId: '$_id',
+          patientName: 1,
+          doctorId: 1,
+          medicines: 1, // Rename to match the desired key in the response
+          _id: 0
+        }
+      },
+      {
+        $sort: { patientId: 1 } // Sort by patientId for consistent output
       }
     ]);
 
@@ -225,10 +260,10 @@ exports.pharmacyPayment = async(req, res) => {
 
   try {
     const { patientId } = req.params;
-    const { userId, doctorId, amount, discount = 0, discountType, paymentStatus } = req.body;
+    const {  doctorId, amount, discount = 0, discountType, paymentStatus } = req.body;
 
     // Validate required fields
-    if (!patientId || !userId || !doctorId || !amount  || !paymentStatus) {
+    if (!patientId || !doctorId || !amount  || !paymentStatus) {
       return res.status(400).json({
         status: 'fail',
         message: 'Missing required fields: patientId, userId, doctorId, amount, finalAmount, paymentStatus'
@@ -240,9 +275,8 @@ exports.pharmacyPayment = async(req, res) => {
     // Process payment if paymentStatus is 'paid'
     if (paymentStatus === 'paid') {
       paymentResponse = await createPayment(req.headers.authorization, {
-        userId,
+        userId:patientId,
         doctorId,
-        patientId,
         actualAmount: amount,
         discount,
         discountType,
@@ -272,52 +306,82 @@ exports.pharmacyPayment = async(req, res) => {
 };
 
 
-// exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
-//   try {
-//     const doctorId =  req.query.userid || req.headers.userid 
+exports.updatePatientMedicinePrice = async (req, res) => {
+  try {
+    // Validate request body
+    const { error } = Joi.object({
+      medicineId: Joi.string().required(),
+      patientId: Joi.string().required(),
+      price: Joi.number().min(0).required(),
+      doctorId: Joi.string().required(),
+    }).validate(req.body);
 
-//     // Validate doctorId
-//     if (!doctorId) {
-//       return res.status(400).json({
-//         status: 'fail',
-//         message: 'Doctor ID is required'
-//       });
-//     }
+    if (error) {
+      return res.status(400).json({
+        status: 'error',
+        message: error.details[0].message,
+      });
+    }
 
-//     // Aggregate medicines by patientId for the given doctorId
-//     const patients = await medicineModel.aggregate([
-//       {
-//         $match: { doctorId } // Filter by doctorId
-//       },
-//       {
-//         $group: {
-//           _id: "$patientId", // Group by patientId
-//           medicines: {
-//             $push: {
-//               _id: "$_id",
-//               medName: "$medName",
-//               quantity: "$quantity",
-//               medInventoryId: "$medInventoryId",
-//               createdAt: "$createdAt"
-//             }
-//           }
-//         }
-//       },
-//       {
-//         $sort: { _id: 1 } // Sort by patientId for consistent output
-//       }
-//     ]);
+    const { medicineId, patientId, price, doctorId } = req.body;
 
-    
+    // Verify patient exists
+    const patient = await Users.findOne({ userId: patientId });
+    if (!patient) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient not found',
+      });
+    }
 
-//     res.status(200).json({
-//       status: 'success',
-//       data: patients || []
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       status: 'fail',
-//       message: error.message
-//     });
-//   }
-// };
+    // Check if medicine exists in MedInventory
+    let medicine = await MedInventory.findById(medicineId);
+    if (!medicine) {
+      // Fallback: get medicine name from Medicine model
+      const patientMedicine = await Medicine.findOne({
+        _id: medicineId,
+        patientId,
+      });
+      if (!patientMedicine) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Patient medicine record not found',
+        });
+      }
+
+      // Add medicine to inventory
+      medicine = await MedInventory.create({
+        medName: patientMedicine.medName || `Medicine-${medicineId}`,
+        price,
+        quantity: patientMedicine.quantity || 1, // Default to 1 if quantity is not available
+        doctorId,
+      });
+    }
+
+    // Update the price in patient medicine
+    const updatedPatientMedicine = await Medicine.findOneAndUpdate(
+      { _id: medicineId, patientId },
+      { $set: { price } },
+      { new: true }
+    );
+
+    if (!updatedPatientMedicine) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Patient medicine record not found',
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Price updated successfully',
+      data: updatedPatientMedicine,
+    });
+  } catch (error) {
+    console.error('Error updating medicine price:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error',
+    });
+  }
+};
