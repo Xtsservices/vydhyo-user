@@ -1,6 +1,7 @@
 const User = require('../models/usersModel');
 const Joi = require('joi');
-
+// const Users = require("../models/usersModel");
+const Users = require("../models/usersModel");
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
 const UserAddress = require('../models/addressModel');
@@ -11,6 +12,8 @@ const axios = require('axios');
 const medInventoryModel = require('../models/medInventoryModel');
 const medicineModel = require('../models/medicineModel');
 const patientTestModel = require('../models/patientTestModel');
+const MedInventoryModel = require('../models/medInventoryModel')
+const MedicineyModel = require('../models/medicineModel')
 const { prescriptionValidationSchema } = require('../schemas/prescriptionValidation');
 const { createPayment } = require('../services/paymentServices');
 const PREFIX_SEQUENCE = require('../utils/constants');
@@ -280,30 +283,77 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
   }
 };
 
-exports.pharmacyPayment = async(req, res) => {
 
+exports.pharmacyPayment = async (req, res) => {
   try {
-    const { patientId } = req.params;
-    const {  doctorId, amount, discount = 0, discountType, paymentStatus } = req.body;
+    // Step 1: Validate input
+    const { error } = Joi.object({
+      patientId: Joi.string().required(),
+      doctorId: Joi.string().required(),
+      amount: Joi.number().min(0).required(),
+      medicines: Joi.array()
+        .items(
+          Joi.object({
+            medicineId: Joi.string().required(),
+            price: Joi.number().min(0).allow(null), // allow null/missing
+            quantity:Joi.number().min(0).allow(null),
+            pharmacyMedID: Joi.string().allow(null),
+          })
+        )
+        .required()
+        .min(1),
+    }).validate(req.body);
 
-    // Validate required fields
-    if (!patientId || !doctorId || !amount  || !paymentStatus) {
+    if (error) {
       return res.status(400).json({
-        status: 'fail',
-        message: 'Missing required fields: patientId, userId, doctorId, amount, finalAmount, paymentStatus'
+        status: "error",
+        message: error.details[0].message,
       });
     }
 
-    let paymentResponse;
+    const { patientId, doctorId, amount, medicines, paymentStatus = 'paid', discount, discountType } = req.body;
 
-    // Process payment if paymentStatus is 'paid'
-    if (paymentStatus === 'paid') {
+    // Step 2: Optional - Verify patient exists
+    const patientExists = await Users.findOne({ userId: patientId });
+    if (!patientExists) {
+      return res
+        .status(404)
+        .json({ status: "error", message: "Patient not found" });
+    }
+
+    // Step 3: Process each medicines
+    const updatedMedicines = [];
+
+    for (const medicine of medicines) {
+      const { medicineId, price,pharmacyMedID } = medicine;
+    
+      console.log("price",price,medicineId, patientId, doctorId)
+      const updateData = {
+        updatedAt: new Date(),
+        status: price || price === 0 ? "completed" : "cancelled",
+      };
+
+
+      console.log("updateData",updateData)
+      const updated = await MedicineyModel.findOneAndUpdate(
+        { _id: medicineId, patientId, doctorId },
+        { $set: updateData },
+        { new: true }
+      );
+
+      if (updated) {
+        updatedMedicines.push(updated);
+      }
+
+        // Process payment if paymentStatus is 'paid'
+    if (paymentStatus === 'paid' && updateData.status === 'completed' && pharmacyMedID) {
       paymentResponse = await createPayment(req.headers.authorization, {
         userId:patientId,
         doctorId,
+        pharmacyMedID,
         actualAmount: amount,
-        discount,
-        discountType,
+        discount:discount || 0,
+        discountType: discountType || 'percentage',
         paymentStatus: 'paid',
         paymentFrom: 'pharmacy',
       });
@@ -315,19 +365,32 @@ exports.pharmacyPayment = async(req, res) => {
         });
       }
     }
+    
+    }
 
-    res.status(200).json({
-      status: 'success',
-      data: paymentResponse || null,
-      message: 'Pharmacy payment processed successfully'
+    
+
+
+    return res.status(200).json({
+      status: "success",
+      message: "Payment processed and test statuses updated",
+      data: {
+        patientId,
+        doctorId,
+        amount,
+        updatedMedicines,
+      },
     });
-  } catch (error) {
-    res.status(500).json({
-      status: 'fail',
-      message: error.message
+  } catch (err) {
+    console.error("Error in processPayment:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
     });
   }
 };
+
+
 
 exports.updatePatientMedicinePrice = async (req, res) => {
   try {
