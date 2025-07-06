@@ -25,9 +25,10 @@ const addTest = async (req, res) => {
 
     const { testName, testPrice, doctorId } = req.body;
 
-    // Check if testName already exists (case-insensitive)
+    // Check if a test with the same name (case-insensitive) and same doctorId already exists
     const existingTest = await TestInventory.findOne({
       testName: { $regex: `^${testName.trim()}$`, $options: "i" },
+      doctorId: doctorId,
     });
 
     if (existingTest) {
@@ -236,7 +237,6 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
   }
 };
 
-
 const updatePatientTestPrice = async (req, res) => {
   try {
     // Validate request body
@@ -268,7 +268,10 @@ const updatePatientTestPrice = async (req, res) => {
     }
 
     // Step 2: Find the patient test
-    const patientTest = await patientTestModel.findOne({ _id: testId, patientId });
+    const patientTest = await patientTestModel.findOne({
+      _id: testId,
+      patientId,
+    });
     if (!patientTest) {
       return res.status(404).json({
         status: "error",
@@ -313,8 +316,6 @@ const updatePatientTestPrice = async (req, res) => {
     });
   }
 };
-
-
 
 const processPayment = async (req, res) => {
   try {
