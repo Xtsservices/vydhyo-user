@@ -1,5 +1,5 @@
 const express = require("express");
-const { addTest, getTestsByDoctorId, getAllTestsPatientsByDoctorID, updatePatientTestPrice, processPayment,  } = require("../controllers/testController");
+const { addTest, getTestsByDoctorId, getAllTestsPatientsByDoctorID, updatePatientTestPrice, processPayment,getpatientTestDetails  } = require("../controllers/testController");
 const router = express.Router();
 
 router.post("/addtest", addTest);
@@ -8,5 +8,6 @@ router.get("/getAllTestsPatientsByDoctorID/:doctorId", getAllTestsPatientsByDoct
 router.post("/updatePatientTestPrice", updatePatientTestPrice);
 router.post("/processPayment", processPayment);
 
+router.get("/getpatientTestDetails", getpatientTestDetails);
 
 module.exports = router;

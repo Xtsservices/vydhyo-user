@@ -505,3 +505,19 @@ exports.updatePatientMedicinePrice = async (req, res) => {
     });
   }
 };
+
+exports.getPharmacyDetail = async (req, res) => {
+  try {
+    const { pharmacyMedID } = req.query;
+    const medicineDetails = await medicineModel.findOne({ pharmacyMedID });
+    return res.status(200).json({
+      success: true,
+      data: medicineDetails,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
