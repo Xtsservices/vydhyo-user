@@ -247,6 +247,7 @@ exports.totalBillPayFromReception = async (req, res) => {
           testId: Joi.string().required(),
           price: Joi.number().min(0).allow(null),
           labTestID: Joi.string().allow(null),
+          status:Joi.string().allow(null),
         })
       ).optional(),
       medicines: Joi.array().items(
@@ -255,6 +256,7 @@ exports.totalBillPayFromReception = async (req, res) => {
           price: Joi.number().min(0).allow(null),
           quantity: Joi.number().min(0).allow(null),
           pharmacyMedID: Joi.string().allow(null),
+          status:Joi.string().allow(null),
         })
       ).optional(),
     }).validate(req.body, { presence: 'optional' });
@@ -358,7 +360,7 @@ exports.totalBillPayFromReception = async (req, res) => {
             userId: patientId,
             doctorId,
             pharmacyMedID,
-            actualAmount: (price && quantity) ? price * quantity : amount, // Use price * quantity if available
+            actualAmount: (price && quantity) ? price * quantity : 0,
             discount: discount || 0,
             discountType: discountType || 'percentage',
             paymentStatus: 'paid',
@@ -381,7 +383,6 @@ exports.totalBillPayFromReception = async (req, res) => {
       data: {
         patientId,
         doctorId,
-        amount,
         updatedTests,
         updatedMedicines,
       },

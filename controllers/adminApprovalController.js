@@ -41,8 +41,8 @@ const sendStatusEmail2 = async (user, status, rejectionReason = '') => {
 
         await transporter.sendMail({
             from: '"Vydhyo" <tech.vydhyo.in@gmail.com>',
-              to: 'pavanreddyr42@gmail.com',
-            // to: user.email,
+            //   to: 'pavanreddyr42@gmail.com',
+            to: user.email,
             subject: subject,
             html: html
         });
@@ -139,8 +139,8 @@ const sendStatusEmail3 = async (user, status, rejectionReason = '') => {
 
         await transporter.sendMail({
             from: '"Vydhyo Healthcare" <tech.vydhyo.in@gmail.com>',
-              to: 'pavanreddyr42@gmail.com',
-            // to: user.email,
+            //   to: 'pavanreddyr42@gmail.com',
+            to: user.email,
             subject: subject,
             html: html
         });
@@ -240,8 +240,8 @@ const sendStatusEmail4 = async (user, status, rejectionReason = '') => {
 
         await transporter.sendMail({
             from: '"Vydhyo Healthcare" <tech.vydhyo.in@gmail.com>',
-            // to: user.email,
-              to: 'pavanreddyr42@gmail.com',
+            to: user.email,
+            //   to: 'pavanreddyr42@gmail.com',
             subject: subject,
             html: html
         });
@@ -335,7 +335,8 @@ const sendStatusEmail = async (user, status, rejectionReason = '') => {
 
         await transporter.sendMail({
             from: '"Vydhyo Healthcare" <tech.vydhyo.in@gmail.com>',
-            to: 'pavanreddyr42@gmail.com',
+            // to: 'pavanreddyr42@gmail.com',
+             to: user.email,
             subject: subject,
             html: html
         });
