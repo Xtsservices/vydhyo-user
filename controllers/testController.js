@@ -428,10 +428,30 @@ const processPayment = async (req, res) => {
   }
 };
 
+const getpatientTestDetails = async (req, res) => {
+  try {
+    const { labTestID } = req.query;
+
+    const patientTestDetils = await patientTestModel.findOne({ labTestID });
+    return res.status(200).json({
+      status: "success",
+      message: "Patient Test Details",
+      data: patientTestDetils,
+    });
+  } catch (err) {
+    console.error("Error in patientTestDetails:", err);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
   addTest,
   getTestsByDoctorId,
   getAllTestsPatientsByDoctorID,
   updatePatientTestPrice,
   processPayment,
+  getpatientTestDetails
 };
