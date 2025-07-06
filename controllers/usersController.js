@@ -63,7 +63,8 @@ const sendOnboardingEmail = async (user) => {
 
         await transporter.sendMail({
             from: '"Vydhyo Healthcare" <tech.vydhyo.in@gmail.com>',
-            to: 'pavanreddyr42@gmail.com', // Replace with user.email for production
+            // to: 'pavanreddyr42@gmail.com', // Replace with user.email for production
+              to: user.email,
             subject: subject,
             html: html
         });
