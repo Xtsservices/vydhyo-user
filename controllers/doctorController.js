@@ -21,7 +21,7 @@ exports.createReceptionist = async (req, res) => {
     }
 
     const doctorReceptionistData = await doctorReceptionist.findOne({
-      doctorId: req.headers.userid,
+      doctorId: req.params.userid,
       receptionistId: req.body.receptionistId,
       status: "active",
     });
@@ -41,9 +41,9 @@ exports.createReceptionist = async (req, res) => {
 
     req.body.status = "active";
     // req.body.role = "receptionist";
-    req.body.doctorId = req.headers?.userid;
-    req.body.createdBy = req.headers?.userid;
-    req.body.assignedBy = req.headers?.userid;
+    req.body.doctorId = req.params?.userid;
+    req.body.createdBy = req.params?.userid;
+    req.body.assignedBy = req.params?.userid;
     req.body.updatedBy = req.headers?.userid;
 
     const counter = await Sequence.findByIdAndUpdate({ _id: sequenceConstant.USERSEQUENCE.USER_MODEL }, { $inc: { seq: 1 } }, { new: true, upsert: true });

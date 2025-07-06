@@ -87,6 +87,7 @@ exports.getAllUsers = async (req, res) => {
       obj.status = req.query?.status
     }
     obj.role = req.query?.type
+    console.log("obj",obj)
     const users = await Users.find(obj, { refreshToken: 0 });
     if (users.length < 1) {
       return res.status(404).json({
