@@ -69,7 +69,6 @@ const sendOnboardingEmail = async (user) => {
             html: html
         });
         
-        console.log(`Onboarding email sent to pavanreddyr42@gmail.com`);
     } catch (error) {
         console.error('Error sending onboarding email:', error);
     }
@@ -525,6 +524,33 @@ exports.userSubmit = async (req, res) => {
         });
     }
 };
-exports.userDetails = async(req, res) => {
-  
-}
+
+
+// In User service[](http://localhost:4002)
+exports.getUsersDetailsByIds = async (req, res) => {
+  try {
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Array of user IDs is required'
+      });
+    }
+
+    const users = await Users.find({ userId: { $in: userIds }, isDeleted: false })
+      .select('userId firstname lastname DOB mobile gender');
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Users retrieved successfully',
+      data: users
+    });
+  } catch (error) {
+    console.error('Error in getUsersByIds:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+  }
+};
+
