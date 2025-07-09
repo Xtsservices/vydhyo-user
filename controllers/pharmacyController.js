@@ -96,7 +96,7 @@ exports.addMedInventoryBulk = [
   async (req, res) => {
     try {
       // Get doctorId from body or headers
-      const doctorId = req.body.doctorId || req.headers.userid;
+      const doctorId = req.query.doctorId || req.headers.userid;
       if (!doctorId) {
         return res.status(400).json({
           status: 'fail',
@@ -116,7 +116,7 @@ exports.addMedInventoryBulk = [
       const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const data = xlsx.utils.sheet_to_json(sheet, { header: ['medName', 'price', 'quantity', 'doctorId'] });
+      const data = xlsx.utils.sheet_to_json(sheet, { header: ['medName', 'price', 'quantity'] });
 
       if (data.length <= 1) { // First row is headers
         return res.status(400).json({
@@ -126,12 +126,12 @@ exports.addMedInventoryBulk = [
       }
 
       // Validate headers
-      const expectedHeaders = ['medName', 'price', 'quantity', 'doctorId'];
+      const expectedHeaders = ['medName', 'price', 'quantity'];
       const firstRow = data[0];
       if (!expectedHeaders.every(header => header in firstRow)) {
         return res.status(400).json({
           status: 'fail',
-          message: 'Excel file must have headers: medName, price, quantity, doctorId'
+          message: 'Excel file must have headers: medName, price, quantity'
         });
       }
 
@@ -142,6 +142,7 @@ exports.addMedInventoryBulk = [
       const errors = [];
       const medicinesToInsert = [];
       const existingMedicines = await checkDuplicates(doctorId, data.map(row => row.medName));
+
       const processedMedNames = new Set();
 
       for (const [index, row] of data.entries()) {
@@ -149,7 +150,8 @@ exports.addMedInventoryBulk = [
         const medicine = { ...row, doctorId };
 
         // Validate row
-        const { error } = medInventoryValidationSchema.validate(medicine, { abortEarly: false });
+        const { error } = medInventoryValidationSchema.validate(row, { abortEarly: false });
+
         if (error) {
           errors.push({
             row: index + 2, // Excel row number (1-based, plus header)
@@ -160,6 +162,7 @@ exports.addMedInventoryBulk = [
 
         // Check for duplicates (database and within file)
         const medNameLower = medicine.medName.toLowerCase();
+
         if (existingMedicines.has(medNameLower) || processedMedNames.has(medNameLower)) {
           errors.push({
             row: index + 2,
@@ -172,7 +175,7 @@ exports.addMedInventoryBulk = [
           medName: medicine.medName,
           price: medicine.price,
           quantity: medicine.quantity,
-          doctorId: medicine.doctorId,
+          doctorId: doctorId,
           createdAt: new Date()
         });
         processedMedNames.add(medNameLower);

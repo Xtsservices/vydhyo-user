@@ -16,10 +16,6 @@ const medInventoryValidationSchema = Joi.object({
     'number.integer': 'Quantity must be an integer',
     'number.min': 'Quantity must be at least 1',
     'any.required': 'Quantity is required'
-  }),
-  doctorId: Joi.string().required().messages({
-    'string.empty': 'Doctor ID is required',
-    'any.required': 'Doctor ID is required'
   })
 });
 
