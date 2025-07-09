@@ -11,9 +11,11 @@ const {
     updateConsultationModes,
     updateBankDetails,
     getUsersByIds,
-    userSubmit
+    userSubmit,
+    getUsersDetailsByIds,
+   
 } = require('../controllers/usersController');
-const { getAddress, updateAddress, addAddress, getClinicAddress } = require('../controllers/addressController');
+const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
 // Configure multer for file handling
@@ -54,7 +56,8 @@ router.get('/getKYCDetails', getKYCDetails);
 
 // Route to send onboarding submission email
 router.post('/sendOnboardingEmail', userSubmit);
-// router.post('/details', userDetails);
+router.post('/getUsersDetailsByIds', getUsersDetailsByIds);
+router.post("/deleteClinicAddress", deleteClinicAddress);
 
 
 
