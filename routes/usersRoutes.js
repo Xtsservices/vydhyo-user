@@ -54,6 +54,7 @@ router.get('/getKYCDetails', getKYCDetails);
 
 // Route to send onboarding submission email
 router.post('/sendOnboardingEmail', userSubmit);
+// router.post('/details', userDetails);
 
 
 
