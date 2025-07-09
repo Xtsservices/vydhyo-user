@@ -526,7 +526,7 @@ exports.userSubmit = async (req, res) => {
 };
 
 
-// In User service[](http://localhost:4002)
+
 exports.getUsersDetailsByIds = async (req, res) => {
   try {
     const { userIds } = req.body;

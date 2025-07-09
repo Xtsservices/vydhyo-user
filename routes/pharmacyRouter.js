@@ -1,10 +1,10 @@
 const express = require("express");
-const { addMedInventory, addPrescription, getAllMedicinesByDoctorID, getAllPharmacyPatientsByDoctorID, pharmacyPayment, updatePatientMedicinePrice ,getPharmacyDetail} = require("../controllers/pharmacyController");
+const { addMedInventory, addPrescription, getAllMedicinesByDoctorID, getAllPharmacyPatientsByDoctorID, pharmacyPayment, updatePatientMedicinePrice ,getPharmacyDetail, addMedInventoryBulk} = require("../controllers/pharmacyController");
 const router = express.Router();
 
 //Routes for approve Doctors
 router.post("/addMedInventory", addMedInventory);
-
+router.post("/addMedInventory/bulk", addMedInventoryBulk);
 
 router.post('/addPrescription', addPrescription);
 router.get("/getAllMedicinesByDoctorID", getAllMedicinesByDoctorID);

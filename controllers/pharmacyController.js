@@ -19,6 +19,16 @@ const { createPayment } = require('../services/paymentServices');
 const PREFIX_SEQUENCE = require('../utils/constants');
 const Counter = require('../sequence/sequenceSchema');
 dotenv.config();
+const multer = require('multer');
+const xlsx = require('xlsx');
+const medInventoryValidationSchema = require('../schemas/medInventorySchema');
+
+
+// Configure multer for file upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 
 exports.addMedInventory = async (req, res) => {
@@ -70,6 +80,133 @@ exports.addMedInventory = async (req, res) => {
     });
   }
 }
+
+// Helper function to check duplicates
+const checkDuplicates = async (doctorId, medNames) => {
+  const existing = await medInventoryModel.find({
+    doctorId,
+    medName: { $in: medNames.map(name => new RegExp(`^${name}$`, 'i')) }
+  }).lean();
+  return new Set(existing.map(med => med.medName.toLowerCase()));
+};
+
+exports.addMedInventoryBulk = [
+  // Middleware to handle file upload
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      // Get doctorId from body or headers
+      const doctorId = req.body.doctorId || req.headers.userid;
+      if (!doctorId) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Doctor ID is required in body or headers'
+        });
+      }
+
+      // Check if file is provided
+      if (!req.file) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Excel file is required'
+        });
+      }
+
+      // Parse Excel file
+      const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const data = xlsx.utils.sheet_to_json(sheet, { header: ['medName', 'price', 'quantity', 'doctorId'] });
+
+      if (data.length <= 1) { // First row is headers
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Excel file contains no data'
+        });
+      }
+
+      // Validate headers
+      const expectedHeaders = ['medName', 'price', 'quantity', 'doctorId'];
+      const firstRow = data[0];
+      if (!expectedHeaders.every(header => header in firstRow)) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Excel file must have headers: medName, price, quantity, doctorId'
+        });
+      }
+
+      // Remove header row
+      data.shift();
+
+      // Validate and process each row
+      const errors = [];
+      const medicinesToInsert = [];
+      const existingMedicines = await checkDuplicates(doctorId, data.map(row => row.medName));
+      const processedMedNames = new Set();
+
+      for (const [index, row] of data.entries()) {
+        // Override doctorId from body/headers
+        const medicine = { ...row, doctorId };
+
+        // Validate row
+        const { error } = medInventoryValidationSchema.validate(medicine, { abortEarly: false });
+        if (error) {
+          errors.push({
+            row: index + 2, // Excel row number (1-based, plus header)
+            message: error.details.map(detail => detail.message).join('; ')
+          });
+          continue;
+        }
+
+        // Check for duplicates (database and within file)
+        const medNameLower = medicine.medName.toLowerCase();
+        if (existingMedicines.has(medNameLower) || processedMedNames.has(medNameLower)) {
+          errors.push({
+            row: index + 2,
+            message: `Medicine '${medicine.medName}' already exists for doctor ${doctorId}`
+          });
+          continue;
+        }
+
+        medicinesToInsert.push({
+          medName: medicine.medName,
+          price: medicine.price,
+          quantity: medicine.quantity,
+          doctorId: medicine.doctorId,
+          createdAt: new Date()
+        });
+        processedMedNames.add(medNameLower);
+      }
+
+      // Insert valid medicines
+      let insertedMedicines = [];
+      if (medicinesToInsert.length > 0) {
+        insertedMedicines = await medInventoryModel.insertMany(medicinesToInsert, { ordered: false });
+      }
+
+      // Build response
+      const response = {
+        status: 'success',
+        message: medicinesToInsert.length > 0 ? 'Medicines added successfully' : 'No valid medicines to add',
+        data: {
+          insertedCount: insertedMedicines.length,
+          insertedMedicines,
+          errors: errors.length > 0 ? errors : undefined
+        }
+      };
+
+      return res.status(201).json(response);
+    } catch (error) {
+      console.error('Error in addMedInventoryBulk:', error.stack);
+      return res.status(500).json({
+        status: 'fail',
+        message: 'Error adding medicine inventory',
+        error: error.message
+      });
+    }
+  }
+];
+
 
 exports.addPrescription = async (req, res) => {
   try {
