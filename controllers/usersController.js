@@ -78,7 +78,7 @@ const sendOnboardingEmail = async (user) => {
 exports.getAllUsers = async (req, res) => {
   try {
     let obj = {}
-    obj.status = 'inActive'
+    // obj.status = 'inActive'
 
     if (!req.query?.type) {
       return res.status(400).json({ error: "'type' query parameter is required." });
@@ -525,3 +525,6 @@ exports.userSubmit = async (req, res) => {
         });
     }
 };
+exports.userDetails = async(req, res) => {
+  
+}
