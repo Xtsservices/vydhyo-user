@@ -32,7 +32,7 @@ const userSchema = Joi.object({
   gender: Joi.string().allow(null, '').optional(),
   DOB: Joi.string()
     .pattern(/^\d{2}-\d{2}-\d{4}$/)
-    .message('DOB must be in YYYY-MM-DD format').required(),
+    .message('DOB must be in YYYY-MM-DD format'),
   bloodgroup: Joi.string()
     .valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-')
     .allow(null, '')
