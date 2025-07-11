@@ -6,6 +6,15 @@ const Users = require("../models/usersModel");
 const { createPayment } = require("../services/paymentServices");
 const PREFIX_SEQUENCE = require("../utils/constants");
 const Counter = require("../sequence/sequenceSchema");
+const multer = require('multer');
+const xlsx = require('xlsx');
+
+// Configure multer for file upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
 
 // Add a new test to the testTable collection
 const addTest = async (req, res) => {
@@ -71,6 +80,131 @@ const addTest = async (req, res) => {
     });
   }
 };
+
+// Helper function to check duplicates
+const checkDuplicates = async (doctorId, testNames) => {
+  const existing = await TestInventory.find({
+    doctorId,
+    testName: { $in: testNames.map(name => new RegExp(`^${name}$`, 'i')) },
+  }).lean();
+  return new Set(existing.map(test => test.testName.toLowerCase()));
+};
+
+const addTestBulk = [
+  upload.single('file'),
+  async (req, res) => {
+    try {
+      // Get doctorId from body or headers
+      const doctorId = req.query.doctorId || req.headers.userid;
+      if (!doctorId) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Doctor ID is required in body or headers',
+        });
+      }
+
+      // Check if file is provided
+      if (!req.file) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Excel file is required',
+        });
+      }
+
+      // Parse Excel file
+      const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const data = xlsx.utils.sheet_to_json(sheet, { header: ['testName', 'testPrice'] });
+
+      if (data.length <= 1) { // First row is headers
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Excel file contains no data',
+        });
+      }
+
+      // Validate headers
+      const expectedHeaders = ['testName', 'testPrice'];
+      const firstRow = data[0];
+      if (!expectedHeaders.every(header => header in firstRow)) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'Excel file must have headers: testName, testPrice',
+        });
+      }
+
+      // Remove header row
+      data.shift();
+
+      // Validate and process each row
+      const errors = [];
+      const testsToInsert = [];
+      const existingTests = await checkDuplicates(doctorId, data.map(row => row.testName));
+      const processedTestNames = new Set();
+
+      for (const [index, row] of data.entries()) {
+        // Override doctorId from body/headers
+        const test = { ...row, doctorId };
+
+        // Validate row using Joi schema
+        const { error } = addTestSchema.validate(test, { abortEarly: false });
+        if (error) {
+          errors.push({
+            row: index + 2, // Excel row number (1-based, plus header)
+            message: error.details.map(detail => detail.message).join('; '),
+          });
+          continue;
+        }
+
+        // Check for duplicates (database and within file)
+        const testNameLower = test.testName.toLowerCase();
+        if (existingTests.has(testNameLower) || processedTestNames.has(testNameLower)) {
+          errors.push({
+            row: index + 2,
+            message: `Test '${test.testName}' already exists for doctor ${doctorId}`,
+          });
+          continue;
+        }
+
+        testsToInsert.push({
+          testName: test.testName.trim(),
+          testPrice: test.testPrice,
+          doctorId: doctorId.trim(),
+          createdAt: new Date(),
+        });
+        processedTestNames.add(testNameLower);
+      }
+
+      // Insert valid tests
+      let insertedTests = [];
+      if (testsToInsert.length > 0) {
+        insertedTests = await TestInventory.insertMany(testsToInsert, { ordered: false });
+      }
+
+      // Build response
+      const response = {
+        status: 'success',
+        message: testsToInsert.length > 0 ? 'Tests added successfully' : 'No valid tests to add',
+        data: {
+          insertedCount: insertedTests.length,
+          insertedTests,
+          errors: errors.length > 0 ? errors : undefined,
+        },
+      };
+
+      return res.status(201).json(response);
+    } catch (error) {
+      console.error('Error in addTestBulk:', error.stack);
+      return res.status(500).json({
+        status: 'fail',
+        message: 'Error adding test inventory',
+        error: error.message,
+      });
+    }
+  },
+]
+
 
 // Get all tests for a specific doctorId
 const getTestsByDoctorId = async (req, res) => {
@@ -453,5 +587,6 @@ module.exports = {
   getAllTestsPatientsByDoctorID,
   updatePatientTestPrice,
   processPayment,
-  getpatientTestDetails
+  getpatientTestDetails,
+  addTestBulk,
 };

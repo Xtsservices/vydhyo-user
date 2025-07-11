@@ -302,7 +302,7 @@ exports.addPrescription = async (req, res) => {
 
 exports.getAllMedicinesByDoctorID = async (req, res) => {
     try {
-        const doctorId = req.headers.userid || req.query.userid;
+        const doctorId =  req.query.doctorId || req.headers.userid ;
     // const { doctorId } = req.query;
     if (!doctorId) {
       return res.status(400).json({
@@ -328,7 +328,7 @@ exports.getAllMedicinesByDoctorID = async (req, res) => {
 
 exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
   try {
-    const doctorId = req.query.userid || req.headers.userid;
+    const doctorId = req.query.doctorId || req.headers.userid;
 
     // Validate doctorId
     if (!doctorId) {
