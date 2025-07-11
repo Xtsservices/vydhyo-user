@@ -72,7 +72,7 @@ exports.getAddress = async (req, res) => {
 
 exports.getClinicAddress = async (req, res) => {
   try { 
-    const userId = req.headers.userid;
+    const userId = req.query.doctorId || req.headers.userid;
     const userAddress = await UserAddress.find({userId});
     if (!userAddress || userAddress.length === 0) { 
       return res.status(404).json({

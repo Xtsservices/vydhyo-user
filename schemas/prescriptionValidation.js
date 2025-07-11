@@ -26,7 +26,21 @@ const medicineValidationSchema = Joi.object({
       'number.base': 'Quantity must be a number',
       'number.integer': 'Quantity must be an integer',
       'number.min': 'Quantity must be at least 1'
-    })
+    }),
+     dosage: Joi.string().required().trim().messages({
+    'string.empty': 'Dosage is required',
+  }),
+  duration: Joi.number().required().min(1).messages({
+    'number.base': 'Duration must be a number',
+    'number.min': 'Duration must be at least 1 day',
+  }),
+  timings: Joi.string().required().trim().messages({
+    'string.empty': 'Timings is required',
+  }),
+  frequency: Joi.number().required().min(1).messages({
+    'number.base': 'Frequency must be a number',
+    'number.min': 'Frequency must be at least 1',
+  }),
 });
 
 // Joi validation schema for tests

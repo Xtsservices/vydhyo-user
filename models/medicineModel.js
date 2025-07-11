@@ -32,6 +32,34 @@ const medicineSchema = new mongoose.Schema(
       required: [true, 'Quantity is required'],
       min: [1, 'Quantity must be at least 1'],
     },
+     dosage: {
+      type: String,
+      required: [true, 'Dosage is required'],
+      trim: true,
+    },
+    duration: {
+      type: Number,
+      required: [true, 'Duration is required'],
+      min: [1, 'Duration must be at least 1 day'],
+      validate: {
+        validator: Number.isInteger,
+        message: 'Duration must be an integer',
+      },
+    },
+    timings: {
+      type: String,
+      required: [true, 'Timings is required'],
+      trim: true,
+    },
+    frequency: {
+      type: Number,
+      required: [true, 'Frequency is required'],
+      min: [1, 'Frequency must be at least 1'],
+      validate: {
+        validator: Number.isInteger,
+        message: 'Frequency must be an integer',
+      },
+    },
     status: {
       type: String,
       enum: ['pending', 'in-progress', 'completed', 'cancelled'],

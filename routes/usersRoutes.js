@@ -13,6 +13,7 @@ const {
     getUsersByIds,
     userSubmit,
     getUsersDetailsByIds,
+    ePrescription,
    
 } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress } = require('../controllers/addressController');
@@ -58,6 +59,7 @@ router.get('/getKYCDetails', getKYCDetails);
 router.post('/sendOnboardingEmail', userSubmit);
 router.post('/getUsersDetailsByIds', getUsersDetailsByIds);
 router.post("/deleteClinicAddress", deleteClinicAddress);
+router.post("/ePrescription", ePrescription);
 
 
 

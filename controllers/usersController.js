@@ -9,6 +9,8 @@ const bankDetailsSchema = require('../schemas/bankDetailsSchema');
 const { encrypt, decrypt } = require('../utils/encryptData');
 const { userAggregation } = require('../queryBuilder/userAggregate');
 const nodemailer = require('nodemailer');
+const ePrescription = require('../models/ePrescriptionModel');
+const ePrescriptionModel = require('../models/ePrescriptionModel');
 
 // Configure Nodemailer transporter
 const transporter = nodemailer.createTransport({
@@ -554,3 +556,106 @@ exports.getUsersDetailsByIds = async (req, res) => {
   }
 };
 
+exports.ePrescription = async (req, res) => {
+  try {
+    const {
+      prescriptionId,
+      appointmentId,
+      userId,
+      doctorId,
+      addressId,
+      doctorInfo,
+      patientInfo,
+      vitals,
+      diagnosis,
+      medications,
+      advice
+    } = req.body;
+
+    // Basic validation
+    if ( !appointmentId || !userId || !doctorId || !addressId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields:  appointmentId, userId, doctorId, or addressId'
+      });
+    }
+
+    if (!doctorInfo || !patientInfo) {
+      return res.status(400).json({
+        success: false,
+        message: 'Doctor and patient information are required'
+      });
+    }
+
+    // Create new e-prescription document
+    const newPrescription = new ePrescriptionModel({
+      prescriptionId,
+      appointmentId,
+      userId,
+      doctorId,
+      addressId,
+      doctorInfo: {
+        doctorName: doctorInfo.doctorName,
+        qualifications: doctorInfo.qualifications,
+        specialization: doctorInfo.specialization,
+        reportDate: doctorInfo.reportDate,
+        reportTime: doctorInfo.reportTime,
+        selectedClinicId: doctorInfo.selectedClinicId,
+        clinicName: doctorInfo.clinicName,
+        clinicAddress: doctorInfo.clinicAddress,
+        city: doctorInfo.city,
+        pincode: doctorInfo.pincode,
+        contactNumber: doctorInfo.contactNumber
+      },
+      patientInfo: {
+        patientName: patientInfo.patientName,
+        age: patientInfo.age,
+        gender: patientInfo.gender,
+        mobileNumber: patientInfo.mobileNumber,
+        chiefComplaint: patientInfo.chiefComplaint,
+        pastMedicalHistory: patientInfo.pastMedicalHistory,
+        familyMedicalHistory: patientInfo.familyMedicalHistory,
+        physicalExamination: patientInfo.physicalExamination
+      },
+      vitals: {
+        bp: vitals?.bp || null,
+        pulseRate: vitals?.pulseRate || null,
+        respiratoryRate: vitals?.respiratoryRate || null,
+        temperature: vitals?.temperature || null,
+        spo2: vitals?.spo2 || null,
+        height: vitals?.height || null,
+        weight: vitals?.weight || null,
+        bmi: vitals?.bmi || null,
+        investigationFindings: vitals?.investigationFindings || null
+      },
+      diagnosis: {
+        diagnosisList: diagnosis?.diagnosisList || null,
+        selectedTests: diagnosis?.selectedTests || []
+      },
+      medications: medications || [],
+      advice: {
+        advice: advice?.advice || null,
+        followUpDate: advice?.followUpDate || null
+      },
+      createdBy: req.user?.id || null, // Assuming user ID comes from auth middleware
+      updatedBy: req.user?.id || null
+    });
+
+    // Save to database
+    const savedPrescription = await newPrescription.save();
+
+    return res.status(201).json({
+      success: true,
+      message: 'E-prescription created successfully',
+      data: savedPrescription
+    });
+
+  } catch (error) {
+    console.error('Error creating e-prescription:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
