@@ -832,3 +832,68 @@ exports.getPharmacyDetail = async (req, res) => {
     });
   }
 };
+
+exports.getPatientPrescriptionDetails = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    // Validate patientId
+    if (!patientId) {
+      return res.status(400).json({
+        success: false,
+        message: "Patient ID is required",
+      });
+    }
+
+    // Fetch medicine details (prescriptions) for the patient
+    const prescriptions = await medicineModel.find({
+      patientId,
+      isDeleted: false,
+    }).select(
+      "_id pharmacyMedID medName quantity dosage duration timings frequency status createdAt updatedAt"
+    );
+
+    // Fetch test details for the patient
+    const labTests = await patientTestModel.find({
+      patientId,
+      isDeleted: false,
+    }).select("_id testName labTestID status createdAt updatedAt");
+
+    // Format the response
+    const response = {
+      success: true,
+      data: {
+        medicines: prescriptions.map((prescription) => ({
+          id: prescription._id,
+          pharmacyMedID: prescription.pharmacyMedID,
+          medName: prescription.medName,
+          quantity: prescription.quantity,
+          dosage: prescription.dosage,
+          duration: prescription.duration,
+          timings: prescription.timings,
+          frequency: prescription.frequency,
+          status: prescription.status,
+          createdAt: prescription.createdAt,
+          updatedAt: prescription.updatedAt,
+        })),
+        tests: labTests.map((test) => ({
+          id: test._id,
+          testName: test.testName,
+          labTestID: test.labTestID,
+          status: test.status,
+          createdAt: test.createdAt,
+          updatedAt: test.updatedAt,
+        })),
+      },
+    };
+
+    // Return the response
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("Error fetching patient prescription details:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
