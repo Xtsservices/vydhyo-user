@@ -372,8 +372,8 @@ exports.addPrescription = async (req, res) => {
         advice: advice?.advice || null,
         followUpDate: advice?.followUpDate || null,
       },
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id,
+      createdBy: req.headers.userid,
+      updatedBy: req.headers.userid,
     });
 
     await eprescription.save();
@@ -383,6 +383,7 @@ exports.addPrescription = async (req, res) => {
       message: "Prescription added successfully",
     });
   } catch (error) {
+    console.log("error",error)
     if (error.code === 11000) {
       return res.status(400).json({
         status: "fail",

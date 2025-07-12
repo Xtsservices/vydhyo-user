@@ -71,12 +71,10 @@ const medicineSchema = new mongoose.Schema(
       index: true,
     },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
     },
     updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
     },
     createdAt: {
       type: Date,
