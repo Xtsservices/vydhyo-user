@@ -1,35 +1,36 @@
-const User = require('../models/usersModel');
-const Joi = require('joi');
+const User = require("../models/usersModel");
+const Joi = require("joi");
 // const Users = require("../models/usersModel");
 const Users = require("../models/usersModel");
-const mongoose = require('mongoose');
-const { v4: uuidv4 } = require('uuid');
-const UserAddress = require('../models/addressModel');
-const addressValidationSchema = require('../schemas/addressSchema');
-const updateAddressValidationSchema = require('../schemas/updateAddressSchema');
-const dotenv = require('dotenv');
-const axios = require('axios');
-const medInventoryModel = require('../models/medInventoryModel');
-const medicineModel = require('../models/medicineModel');
-const patientTestModel = require('../models/patientTestModel');
-const MedInventoryModel = require('../models/medInventoryModel')
-const MedicineyModel = require('../models/medicineModel')
-const { prescriptionValidationSchema } = require('../schemas/prescriptionValidation');
-const { createPayment } = require('../services/paymentServices');
-const PREFIX_SEQUENCE = require('../utils/constants');
-const Counter = require('../sequence/sequenceSchema');
+const mongoose = require("mongoose");
+const { v4: uuidv4 } = require("uuid");
+const UserAddress = require("../models/addressModel");
+const addressValidationSchema = require("../schemas/addressSchema");
+const updateAddressValidationSchema = require("../schemas/updateAddressSchema");
+const dotenv = require("dotenv");
+const axios = require("axios");
+const medInventoryModel = require("../models/medInventoryModel");
+const medicineModel = require("../models/medicineModel");
+const patientTestModel = require("../models/patientTestModel");
+const MedInventoryModel = require("../models/medInventoryModel");
+const MedicineyModel = require("../models/medicineModel");
+const {
+  prescriptionValidationSchema,
+} = require("../schemas/prescriptionValidation");
+const { createPayment } = require("../services/paymentServices");
+const PREFIX_SEQUENCE = require("../utils/constants");
+const Counter = require("../sequence/sequenceSchema");
 dotenv.config();
-const multer = require('multer');
-const xlsx = require('xlsx');
-const medInventoryValidationSchema = require('../schemas/medInventorySchema');
+const multer = require("multer");
+const xlsx = require("xlsx");
+const medInventoryValidationSchema = require("../schemas/medInventorySchema");
 
-
+const eprescriptionsModel = require("../models/ePrescriptionModel");
 // Configure multer for file upload
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
-
 
 exports.addMedInventory = async (req, res) => {
   try {
@@ -38,100 +39,104 @@ exports.addMedInventory = async (req, res) => {
     // Validate required fields
     if (!medName || !price || !quantity || !doctorId) {
       return res.status(400).json({
-        status: 'fail',
-        message: 'All fields (medName, price, quantity, doctorId) are required'
+        status: "fail",
+        message: "All fields (medName, price, quantity, doctorId) are required",
       });
     }
 
     // Check for existing medicine with same medName and doctorId
     const existingMedicine = await medInventoryModel.findOne({
-      medName: { $regex: `^${medName}$`, $options: 'i' }, // Case-insensitive match
-      doctorId
+      medName: { $regex: `^${medName}$`, $options: "i" }, // Case-insensitive match
+      doctorId,
     });
 
     if (existingMedicine) {
       return res.status(409).json({
-        status: 'fail',
-        message: 'Medicine already exists for this doctor'
+        status: "fail",
+        message: "Medicine already exists for this doctor",
       });
     }
-
 
     // Create new medicine inventory entry
     const medInventory = new medInventoryModel({
       medName,
       price,
       quantity,
-      doctorId
+      doctorId,
     });
 
     // Save to database
     await medInventory.save();
-    
+
     res.status(201).json({
       success: true,
       data: medInventory,
-      message: 'Medicine added to inventory successfully'
+      message: "Medicine added to inventory successfully",
     });
   } catch (error) {
     return res.status(500).json({
-      status: 'fail',
+      status: "fail",
       message: error.message,
     });
   }
-}
+};
 
 // Helper function to check duplicates
 const checkDuplicates = async (doctorId, medNames) => {
-  const existing = await medInventoryModel.find({
-    doctorId,
-    medName: { $in: medNames.map(name => new RegExp(`^${name}$`, 'i')) }
-  }).lean();
-  return new Set(existing.map(med => med.medName.toLowerCase()));
+  const existing = await medInventoryModel
+    .find({
+      doctorId,
+      medName: { $in: medNames.map((name) => new RegExp(`^${name}$`, "i")) },
+    })
+    .lean();
+  return new Set(existing.map((med) => med.medName.toLowerCase()));
 };
 
 exports.addMedInventoryBulk = [
   // Middleware to handle file upload
-  upload.single('file'),
+  upload.single("file"),
   async (req, res) => {
     try {
       // Get doctorId from body or headers
       const doctorId = req.query.doctorId || req.headers.userid;
       if (!doctorId) {
         return res.status(400).json({
-          status: 'fail',
-          message: 'Doctor ID is required in body or headers'
+          status: "fail",
+          message: "Doctor ID is required in body or headers",
         });
       }
 
       // Check if file is provided
       if (!req.file) {
         return res.status(400).json({
-          status: 'fail',
-          message: 'Excel file is required'
+          status: "fail",
+          message: "Excel file is required",
         });
       }
 
       // Parse Excel file
-      const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+      const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const data = xlsx.utils.sheet_to_json(sheet, { header: ['medName', 'price', 'quantity'] });
+      const data = xlsx.utils.sheet_to_json(sheet, {
+        header: ["medName", "price", "quantity"],
+      });
 
-      if (data.length <= 1) { // First row is headers
+      if (data.length <= 1) {
+        // First row is headers
         return res.status(400).json({
-          status: 'fail',
-          message: 'Excel file contains no data'
+          status: "fail",
+          message: "Excel file contains no data",
         });
       }
 
       // Validate headers
-      const expectedHeaders = ['medName', 'price', 'quantity'];
+      const expectedHeaders = ["medName", "price", "quantity"];
       const firstRow = data[0];
-      if (!expectedHeaders.every(header => header in firstRow)) {
+      if (!expectedHeaders.every((header) => header in firstRow)) {
         return res.status(400).json({
-          status: 'fail',
-          message: 'Excel file must have headers: medName, price, quantity'
+          status: "fail",
+          message: "Excel file must have headers: medName, price, quantity",
         });
       }
 
@@ -141,7 +146,10 @@ exports.addMedInventoryBulk = [
       // Validate and process each row
       const errors = [];
       const medicinesToInsert = [];
-      const existingMedicines = await checkDuplicates(doctorId, data.map(row => row.medName));
+      const existingMedicines = await checkDuplicates(
+        doctorId,
+        data.map((row) => row.medName)
+      );
 
       const processedMedNames = new Set();
 
@@ -150,12 +158,14 @@ exports.addMedInventoryBulk = [
         const medicine = { ...row, doctorId };
 
         // Validate row
-        const { error } = medInventoryValidationSchema.validate(row, { abortEarly: false });
+        const { error } = medInventoryValidationSchema.validate(row, {
+          abortEarly: false,
+        });
 
         if (error) {
           errors.push({
             row: index + 2, // Excel row number (1-based, plus header)
-            message: error.details.map(detail => detail.message).join('; ')
+            message: error.details.map((detail) => detail.message).join("; "),
           });
           continue;
         }
@@ -163,10 +173,13 @@ exports.addMedInventoryBulk = [
         // Check for duplicates (database and within file)
         const medNameLower = medicine.medName.toLowerCase();
 
-        if (existingMedicines.has(medNameLower) || processedMedNames.has(medNameLower)) {
+        if (
+          existingMedicines.has(medNameLower) ||
+          processedMedNames.has(medNameLower)
+        ) {
           errors.push({
             row: index + 2,
-            message: `Medicine '${medicine.medName}' already exists for doctor ${doctorId}`
+            message: `Medicine '${medicine.medName}' already exists for doctor ${doctorId}`,
           });
           continue;
         }
@@ -176,7 +189,7 @@ exports.addMedInventoryBulk = [
           price: medicine.price,
           quantity: medicine.quantity,
           doctorId: doctorId,
-          createdAt: new Date()
+          createdAt: new Date(),
         });
         processedMedNames.add(medNameLower);
       }
@@ -184,151 +197,300 @@ exports.addMedInventoryBulk = [
       // Insert valid medicines
       let insertedMedicines = [];
       if (medicinesToInsert.length > 0) {
-        insertedMedicines = await medInventoryModel.insertMany(medicinesToInsert, { ordered: false });
+        insertedMedicines = await medInventoryModel.insertMany(
+          medicinesToInsert,
+          { ordered: false }
+        );
       }
 
       // Build response
       const response = {
-        status: 'success',
-        message: medicinesToInsert.length > 0 ? 'Medicines added successfully' : 'No valid medicines to add',
+        status: "success",
+        message:
+          medicinesToInsert.length > 0
+            ? "Medicines added successfully"
+            : "No valid medicines to add",
         data: {
           insertedCount: insertedMedicines.length,
           insertedMedicines,
-          errors: errors.length > 0 ? errors : undefined
-        }
+          errors: errors.length > 0 ? errors : undefined,
+        },
       };
 
       return res.status(201).json(response);
     } catch (error) {
-      console.error('Error in addMedInventoryBulk:', error.stack);
+      console.error("Error in addMedInventoryBulk:", error.stack);
       return res.status(500).json({
-        status: 'fail',
-        message: 'Error adding medicine inventory',
-        error: error.message
+        status: "fail",
+        message: "Error adding medicine inventory",
+        error: error.message,
       });
     }
-  }
+  },
 ];
-
 
 exports.addPrescription = async (req, res) => {
   try {
-    // Validate input using Joi
     const { error, value } = prescriptionValidationSchema.validate(req.body, {
       abortEarly: false,
-      stripUnknown: true
+      stripUnknown: true,
     });
 
     if (error) {
-      const errorMessages = error.details.map(detail => detail.message);
+      const errorMessages = error.details.map((detail) => detail.message);
       return res.status(400).json({
-        status: 'fail',
-        message: 'Validation failed',
-        errors: errorMessages
+        status: "fail",
+        message: "Validation failed",
+        errors: errorMessages,
       });
     }
 
-    const { patientId, doctorId, medicines, tests } = value;
+    const {
+      userId,
+      doctorId,
+      appointmentId,
+      addressId,
+      patientInfo,
+      vitals,
+      diagnosis,
+      advice,
+    } = value;
 
-    // Save medicines if provided
-    if (medicines && medicines.length > 0) {
-      for (const medicine of medicines) {
-        const { medInventoryId, medName, quantity,dosage, duration, timings,frequency } = medicine;
-
-        const medCounter = await Counter.findByIdAndUpdate(
-      { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
+    // Generate unique prescriptionId
+    const prescriptionCounter = await Counter.findByIdAndUpdate(
+      { _id: PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.EPRESCRIPTION_MODEL },
       { $inc: { seq: 1 } },
       { new: true, upsert: true }
     );
-      const pharmacyMedID = PREFIX_SEQUENCE.MEDICINES_SEQUENCE.SEQUENCE.concat(medCounter.seq);
+    const prescriptionId =
+      PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.SEQUENCE.concat(
+        prescriptionCounter.seq
+      );
 
+    // Save medicines if provided
+    if (diagnosis?.medications && diagnosis.medications.length > 0) {
+      for (const medicine of diagnosis.medications) {
+        const {
+          id: medInventoryId,
+          medName,
+          quantity,
+          dosage,
+          duration,
+          timings,
+          frequency,
+        } = medicine;
+
+        const medCounter = await Counter.findByIdAndUpdate(
+          { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
+          { $inc: { seq: 1 } },
+          { new: true, upsert: true }
+        );
+        const pharmacyMedID =
+          PREFIX_SEQUENCE.MEDICINES_SEQUENCE.SEQUENCE.concat(medCounter.seq);
 
         await new medicineModel({
           medInventoryId: medInventoryId ? medInventoryId : null,
           medName,
           quantity,
-           dosage,
+          dosage,
           duration,
-          timings,
+          timings: Array.isArray(timings) ? timings.join(", ") : timings, // Convert array to string
           frequency,
           pharmacyMedID,
-          patientId,
+          patientId: userId,
           doctorId,
-          createdBy: req.user?._id,
-          updatedBy: req.user?._id
+          createdBy: req.headers.userid,
+          updatedBy: req.headers.userid,
         }).save();
       }
     }
 
     // Save tests if provided
-    if (tests && tests.length > 0) {
-      for (const test of tests) {
+    if (diagnosis?.selectedTests && diagnosis.selectedTests.length > 0) {
+      for (const test of diagnosis.selectedTests) {
         const { testInventoryId, testName } = test;
 
-          const testCounter = await Counter.findByIdAndUpdate(
-      { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true }
-    );
-      const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(testCounter.seq);
+        const testCounter = await Counter.findByIdAndUpdate(
+          { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
+          { $inc: { seq: 1 } },
+          { new: true, upsert: true }
+        );
+        const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(
+          testCounter.seq
+        );
 
         await new patientTestModel({
-          testInventoryId: testInventoryId ? testInventoryId: null,
+          testInventoryId: testInventoryId ? testInventoryId : null,
           testName,
-          patientId,
+          patientId: userId,
           labTestID,
           doctorId,
           createdBy: req.user?._id,
-          updatedBy: req.user?._id
+          updatedBy: req.user?._id,
         }).save();
       }
     }
 
+    // Create e-prescription document
+    const eprescription = new eprescriptionsModel({
+      prescriptionId,
+      appointmentId,
+      userId,
+      doctorId,
+      addressId,
+      patientInfo: {
+        patientName: patientInfo?.patientName,
+        age: patientInfo?.age,
+        gender: patientInfo?.gender,
+        mobileNumber: patientInfo?.mobileNumber,
+        chiefComplaint: patientInfo?.chiefComplaint,
+        pastMedicalHistory: patientInfo?.pastMedicalHistory || null,
+        familyMedicalHistory: patientInfo?.familyMedicalHistory || null,
+        physicalExamination: patientInfo?.physicalExamination || null,
+      },
+      vitals: {
+        bp: vitals?.bp || null,
+        pulseRate: vitals?.pulseRate || null,
+        respiratoryRate: vitals?.respiratoryRate || null,
+        temperature: vitals?.temperature || null,
+        spo2: vitals?.spo2 || null,
+        height: vitals?.height || null,
+        weight: vitals?.weight || null,
+        bmi: vitals?.bmi || null,
+        investigationFindings: vitals?.investigationFindings || null,
+      },
+      diagnosis: diagnosis
+        ? {
+            diagnosisNote: diagnosis.diagnosisNote || null,
+            testsNote: diagnosis.testsNote || null,
+            PrescribeMedNotes: diagnosis.PrescribeMedNotes || null,
+            selectedTests: diagnosis.selectedTests || [],
+            medications: diagnosis.medications || [],
+          }
+        : null,
+      advice: {
+        advice: advice?.advice || null,
+        followUpDate: advice?.followUpDate || null,
+      },
+      createdBy: req.user?._id,
+      updatedBy: req.user?._id,
+    });
+
+    await eprescription.save();
+
     res.status(201).json({
       success: true,
-      message: 'Prescription added successfully'
+      message: "Prescription added successfully",
     });
   } catch (error) {
-    // Handle duplicate key error specifically
     if (error.code === 11000) {
       return res.status(400).json({
-        status: 'fail',
-        message: 'Duplicate prescription entry detected'
+        status: "fail",
+        message: "Duplicate prescription entry detected",
       });
     }
 
     res.status(500).json({
-      status: 'fail',
-      message: error.message
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+
+exports.getEPrescriptionByPatientId = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    if (!patientId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Patient ID is required",
+      });
+    }
+
+    const prescriptions = await eprescriptionsModel.find({ userId: patientId });
+
+    if (!prescriptions || prescriptions.length === 0) {
+      return res.status(200).json({
+        status: "fail",
+        message: "No prescriptions found for this patient",
+        data: [],
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Prescriptions retrieved successfully",
+      data: prescriptions,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+
+exports.getEPrescriptionByprescriptionId = async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+
+    if (!prescriptionId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "prescription ID is required",
+      });
+    }
+
+    const prescriptions = await eprescriptionsModel.find({
+      prescriptionId: prescriptionId,
+    });
+
+    if (!prescriptions || prescriptions.length === 0) {
+      return res.status(200).json({
+        status: "fail",
+        message: "No prescriptions found for this patient",
+        data: [],
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "success",
+      data: prescriptions,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      message: error.message,
     });
   }
 };
 
 exports.getAllMedicinesByDoctorID = async (req, res) => {
-    try {
-        const doctorId =  req.query.doctorId || req.headers.userid ;
+  try {
+    const doctorId = req.query.doctorId || req.headers.userid;
     // const { doctorId } = req.query;
     if (!doctorId) {
       return res.status(400).json({
         success: false,
-        message: 'Doctor ID is required'
+        message: "Doctor ID is required",
       });
     }
-    const inventory = await medInventoryModel.find({ doctorId }).sort({ createdAt: -1 });
+    const inventory = await medInventoryModel
+      .find({ doctorId })
+      .sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
-      data: inventory
+      data: inventory,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
-}
-
-
-
+};
 
 exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
   try {
@@ -337,96 +499,95 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
     // Validate doctorId
     if (!doctorId) {
       return res.status(400).json({
-        status: 'fail',
-        message: 'Doctor ID is required'
+        status: "fail",
+        message: "Doctor ID is required",
       });
     }
 
     // Aggregate medicines by patientId for the given doctorId with price from MedInventory
     const patients = await medicineModel.aggregate([
       {
-        $match: { doctorId, isDeleted: false } // Filter by doctorId and non-deleted records
+        $match: { doctorId, isDeleted: false }, // Filter by doctorId and non-deleted records
       },
       {
         $lookup: {
-          from: 'medinventories', // Collection name for MedInventory model
-          localField: 'medInventoryId',
-          foreignField: '_id',
-          as: 'inventoryData'
-        }
+          from: "medinventories", // Collection name for MedInventory model
+          localField: "medInventoryId",
+          foreignField: "_id",
+          as: "inventoryData",
+        },
       },
       {
         $unwind: {
-          path: '$inventoryData',
-          preserveNullAndEmptyArrays: true // Keep medicines even if no matching inventory
-        }
+          path: "$inventoryData",
+          preserveNullAndEmptyArrays: true, // Keep medicines even if no matching inventory
+        },
       },
       {
         $lookup: {
-          from: 'users', // Collection name for Users model
-          localField: 'patientId',
-          foreignField: 'userId', // Assuming 'userId' is the field in the users collection
-          as: 'userData'
-        }
+          from: "users", // Collection name for Users model
+          localField: "patientId",
+          foreignField: "userId", // Assuming 'userId' is the field in the users collection
+          as: "userData",
+        },
       },
       {
         $unwind: {
-          path: '$userData',
-          preserveNullAndEmptyArrays: true // Keep medicines even if no matching user
-        }
+          path: "$userData",
+          preserveNullAndEmptyArrays: true, // Keep medicines even if no matching user
+        },
       },
       {
         $group: {
-          _id: '$patientId', // Group by patientId
+          _id: "$patientId", // Group by patientId
           patientName: {
             $first: {
               $concat: [
-                { $ifNull: ['$userData.firstname', ''] },
-                ' ',
-                { $ifNull: ['$userData.lastname', ''] }
-              ]
-            }
+                { $ifNull: ["$userData.firstname", ""] },
+                " ",
+                { $ifNull: ["$userData.lastname", ""] },
+              ],
+            },
           },
-          doctorId: { $first: '$doctorId' }, // Include doctorId
+          doctorId: { $first: "$doctorId" }, // Include doctorId
           medicines: {
             $push: {
-              _id: '$_id',
-              medName: '$medName',
-              price: { $ifNull: ['$inventoryData.price', null] },
-              quantity: '$quantity',
-              status: '$status',
-              createdAt: '$createdAt',
-              pharmacyMedID: '$pharmacyMedID' // Include pharmacyMedID
-            }
-          }
-        }
+              _id: "$_id",
+              medName: "$medName",
+              price: { $ifNull: ["$inventoryData.price", null] },
+              quantity: "$quantity",
+              status: "$status",
+              createdAt: "$createdAt",
+              pharmacyMedID: "$pharmacyMedID", // Include pharmacyMedID
+            },
+          },
+        },
       },
       {
         $project: {
-          patientId: '$_id',
+          patientId: "$_id",
           patientName: 1,
           doctorId: 1,
           medicines: 1, // Rename to match the desired key in the response
-          _id: 0
-        }
+          _id: 0,
+        },
       },
       {
-        $sort: { patientId: 1 } // Sort by patientId for consistent output
-      }
+        $sort: { patientId: 1 }, // Sort by patientId for consistent output
+      },
     ]);
 
     res.status(200).json({
-      status: 'success',
-      data: patients || []
+      status: "success",
+      data: patients || [],
     });
   } catch (error) {
     res.status(500).json({
-      status: 'fail',
-      message: error.message
+      status: "fail",
+      message: error.message,
     });
   }
 };
-
 
 exports.pharmacyPayment = async (req, res) => {
   try {
@@ -440,7 +601,7 @@ exports.pharmacyPayment = async (req, res) => {
           Joi.object({
             medicineId: Joi.string().required(),
             price: Joi.number().min(0).allow(null), // allow null/missing
-            quantity:Joi.number().min(0).allow(null),
+            quantity: Joi.number().min(0).allow(null),
             pharmacyMedID: Joi.string().allow(null),
           })
         )
@@ -455,7 +616,15 @@ exports.pharmacyPayment = async (req, res) => {
       });
     }
 
-    const { patientId, doctorId, amount, medicines, paymentStatus = 'paid', discount, discountType } = req.body;
+    const {
+      patientId,
+      doctorId,
+      amount,
+      medicines,
+      paymentStatus = "paid",
+      discount,
+      discountType,
+    } = req.body;
 
     // Step 2: Optional - Verify patient exists
     const patientExists = await Users.findOne({ userId: patientId });
@@ -469,16 +638,15 @@ exports.pharmacyPayment = async (req, res) => {
     const updatedMedicines = [];
 
     for (const medicine of medicines) {
-      const { medicineId, price,pharmacyMedID } = medicine;
-    
-      console.log("price",price,medicineId, patientId, doctorId)
+      const { medicineId, price, pharmacyMedID } = medicine;
+
+      console.log("price", price, medicineId, patientId, doctorId);
       const updateData = {
         updatedAt: new Date(),
         status: price || price === 0 ? "completed" : "cancelled",
       };
 
-
-      console.log("updateData",updateData)
+      console.log("updateData", updateData);
       const updated = await MedicineyModel.findOneAndUpdate(
         { _id: medicineId, patientId, doctorId },
         { $set: updateData },
@@ -489,31 +657,31 @@ exports.pharmacyPayment = async (req, res) => {
         updatedMedicines.push(updated);
       }
 
-        // Process payment if paymentStatus is 'paid'
-    if (paymentStatus === 'paid' && updateData.status === 'completed' && pharmacyMedID) {
-      paymentResponse = await createPayment(req.headers.authorization, {
-        userId:patientId,
-        doctorId,
-        pharmacyMedID,
-        actualAmount: amount,
-        discount:discount || 0,
-        discountType: discountType || 'percentage',
-        paymentStatus: 'paid',
-        paymentFrom: 'pharmacy',
-      });
-
-      if (!paymentResponse || paymentResponse.status !== 'success') {
-        return res.status(500).json({
-          status: 'fail',
-          message: 'Payment failed.'
+      // Process payment if paymentStatus is 'paid'
+      if (
+        paymentStatus === "paid" &&
+        updateData.status === "completed" &&
+        pharmacyMedID
+      ) {
+        paymentResponse = await createPayment(req.headers.authorization, {
+          userId: patientId,
+          doctorId,
+          pharmacyMedID,
+          actualAmount: amount,
+          discount: discount || 0,
+          discountType: discountType || "percentage",
+          paymentStatus: "paid",
+          paymentFrom: "pharmacy",
         });
+
+        if (!paymentResponse || paymentResponse.status !== "success") {
+          return res.status(500).json({
+            status: "fail",
+            message: "Payment failed.",
+          });
+        }
       }
     }
-    
-    }
-
-    
-
 
     return res.status(200).json({
       status: "success",
@@ -534,8 +702,6 @@ exports.pharmacyPayment = async (req, res) => {
   }
 };
 
-
-
 exports.updatePatientMedicinePrice = async (req, res) => {
   try {
     // Validate request body
@@ -548,9 +714,9 @@ exports.updatePatientMedicinePrice = async (req, res) => {
 
     if (error) {
       return res.status(400).json({
-        status: 'fail',
-        message: 'Validation failed',
-        errors: error.details.map(detail => detail.message),
+        status: "fail",
+        message: "Validation failed",
+        errors: error.details.map((detail) => detail.message),
       });
     }
 
@@ -560,8 +726,8 @@ exports.updatePatientMedicinePrice = async (req, res) => {
     const patient = await User.findOne({ userId: patientId });
     if (!patient) {
       return res.status(404).json({
-        status: 'fail',
-        message: 'Patient not found',
+        status: "fail",
+        message: "Patient not found",
       });
     }
 
@@ -571,20 +737,20 @@ exports.updatePatientMedicinePrice = async (req, res) => {
       patientId,
       doctorId,
       isDeleted: false,
-      status: { $ne: 'cancelled' }
+      status: { $ne: "cancelled" },
     });
 
     if (!medicine) {
       return res.status(404).json({
-        status: 'fail',
-        message: 'Patient medicine record not found',
+        status: "fail",
+        message: "Patient medicine record not found",
       });
     }
 
     // Check if medicine exists in MedInventory
     let medInventory = await medInventoryModel.findOne({
       medName: medicine.medName,
-      doctorId
+      doctorId,
     });
 
     if (!medInventory) {
@@ -593,7 +759,7 @@ exports.updatePatientMedicinePrice = async (req, res) => {
         medName: medicine.medName,
         price,
         quantity: medicine.quantity,
-        doctorId
+        doctorId,
       });
 
       // Update medicine with new medInventoryId
@@ -614,38 +780,38 @@ exports.updatePatientMedicinePrice = async (req, res) => {
     // Update price in medicine record
     const updatedMedicine = await medicineModel.findByIdAndUpdate(
       medicineId,
-      { 
-        $set: { 
+      {
+        $set: {
           price,
           updatedBy: req.user?._id,
-          updatedAt: Date.now()
-        }
+          updatedAt: Date.now(),
+        },
       },
       { new: true }
     );
 
     return res.status(200).json({
-      status: 'success',
-      message: 'Price updated successfully',
+      status: "success",
+      message: "Price updated successfully",
       data: {
         medicine: updatedMedicine,
-        inventory: medInventory
+        inventory: medInventory,
       },
     });
   } catch (error) {
-    console.error('Error updating medicine price:', error);
-    
+    console.error("Error updating medicine price:", error);
+
     // Handle specific errors
     if (error.code === 11000) {
       return res.status(409).json({
-        status: 'fail',
-        message: 'Duplicate medicine entry detected'
+        status: "fail",
+        message: "Duplicate medicine entry detected",
       });
     }
 
     return res.status(500).json({
-      status: 'fail',
-      message: 'Internal server error'
+      status: "fail",
+      message: "Internal server error",
     });
   }
 };

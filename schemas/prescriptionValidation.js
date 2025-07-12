@@ -1,94 +1,137 @@
-const Joi = require('joi');
+const Joi = require("joi");
 
-// Joi validation schema for medicines
+// Sub-schema for medications
 const medicineValidationSchema = Joi.object({
-  medInventoryId: Joi.string()
-    .allow(null)
-    .pattern(/^[0-9a-fA-F]{24}$/, 'valid ObjectId')
-    .messages({
-      'string.pattern.name': 'medInventoryId must be a valid ObjectId or null'
-    }),
-  medName: Joi.string()
-    .required()
-    .trim()
-    .min(1)
-    .max(100)
-    .messages({
-      'string.empty': 'Medicine name is required',
-      'string.min': 'Medicine name must be at least 1 character long',
-      'string.max': 'Medicine name cannot exceed 100 characters'
-    }),
-  quantity: Joi.number()
-    .required()
-    .integer()
-    .min(1)
-    .messages({
-      'number.base': 'Quantity must be a number',
-      'number.integer': 'Quantity must be an integer',
-      'number.min': 'Quantity must be at least 1'
-    }),
-     dosage: Joi.string().required().trim().messages({
-    'string.empty': 'Dosage is required',
+  medInventoryId: Joi.string().required().messages({
+    "string.base": "Medication ID must be a string",
+    "any.required": "Medication ID is required",
   }),
-  duration: Joi.number().required().min(1).messages({
-    'number.base': 'Duration must be a number',
-    'number.min': 'Duration must be at least 1 day',
+  medName: Joi.string().trim().required().messages({
+    "string.empty": "Medicine name is required",
+    "any.required": "Medicine name is required",
   }),
-  timings: Joi.string().required().trim().messages({
-    'string.empty': 'Timings is required',
+  quantity: Joi.number().integer().min(1).required().messages({
+    "number.base": "Quantity must be a number",
+    "number.integer": "Quantity must be an integer",
+    "number.min": "Quantity must be at least 1",
+    "any.required": "Quantity is required",
   }),
-  frequency: Joi.number().required().min(1).messages({
-    'number.base': 'Frequency must be a number',
-    'number.min': 'Frequency must be at least 1',
+  dosage: Joi.string().trim().required().messages({
+    "string.empty": "Dosage is required",
+    "any.required": "Dosage is required",
+  }),
+  duration: Joi.number().integer().min(1).required().messages({
+    "number.base": "Duration must be a number",
+    "number.integer": "Duration must be an integer",
+    "number.min": "Duration must be at least 1 day",
+    "any.required": "Duration is required",
+  }),
+  timings: Joi.array().items(Joi.string().trim()).min(1).required().messages({
+    "array.base": "Timings must be an array of strings",
+    "array.min": "Timings must contain at least one entry",
+    "any.required": "Timings is required",
+  }),
+  frequency: Joi.number().integer().min(1).required().messages({
+    "number.base": "Frequency must be a number",
+    "number.integer": "Frequency must be an integer",
+    "number.min": "Frequency must be at least 1",
+    "any.required": "Frequency is required",
   }),
 });
 
-// Joi validation schema for tests
+// Sub-schema for tests
 const testValidationSchema = Joi.object({
-  testInventoryId: Joi.string()
-    .allow(null)
-    .pattern(/^[0-9a-fA-F]{24}$/, 'valid ObjectId')
-    .messages({
-      'string.pattern.name': 'testInventoryId must be a valid ObjectId or null'
-    }),
-  testName: Joi.string()
-    .required()
-    .trim()
-    .min(2)
-    .max(100)
-    .messages({
-      'string.empty': 'Test name is required',
-      'string.min': 'Test name must be at least 2 characters long',
-      'string.max': 'Test name cannot exceed 100 characters'
-    })
+  testName: Joi.string().trim().min(2).max(100).required().messages({
+    "string.empty": "Test name is required",
+    "string.min": "Test name must be at least 2 characters long",
+    "string.max": "Test name cannot exceed 100 characters",
+    "any.required": "Test name is required",
+  }),
+  testInventoryId: Joi.string().optional().allow(null, "").messages({
+    "string.base": "Test inventory ID must be a string",
+  }),
 });
 
-// Joi validation schema for the entire prescription request
+// Main prescription schema
 const prescriptionValidationSchema = Joi.object({
-  patientId: Joi.string()
-    .required()
-    .trim()
-    .messages({
-      'string.empty': 'Patient ID is required'
+  appointmentId: Joi.string().trim().required().messages({
+    "string.empty": "Appointment ID is required",
+    "any.required": "Appointment ID is required",
+  }),
+  userId: Joi.string().trim().required().messages({
+    "string.empty": "User ID is required",
+    "any.required": "User ID is required",
+  }),
+  doctorId: Joi.string().trim().required().messages({
+    "string.empty": "Doctor ID is required",
+    "any.required": "Doctor ID is required",
+  }),
+  addressId: Joi.string().trim().required().messages({
+    "string.empty": "Address ID is required",
+    "any.required": "Address ID is required",
+  }),
+  patientInfo: Joi.object({
+    patientName: Joi.string().trim().required().messages({
+      "string.empty": "Patient name is required",
+      "any.required": "Patient name is required",
     }),
-  doctorId: Joi.string()
-    .required()
-    .trim()
-    .messages({
-      'string.empty': 'Doctor ID is required'
+    age: Joi.number().integer().min(0).required().messages({
+      "number.base": "Age must be a number",
+      "number.integer": "Age must be an integer",
+      "number.min": "Age cannot be negative",
+      "any.required": "Age is required",
     }),
-  medicines: Joi.array()
-    .items(medicineValidationSchema)
+    gender: Joi.string().valid("Male", "Female", "Other").required().messages({
+      "string.empty": "Gender is required",
+      "any.only": "Gender must be one of Male, Female, or Other",
+      "any.required": "Gender is required",
+    }),
+    mobileNumber: Joi.string()
+      .pattern(/^\d{10}$/)
+      .required()
+      .messages({
+        "string.empty": "Mobile number is required",
+        "string.pattern.base": "Mobile number must be a 10-digit number",
+        "any.required": "Mobile number is required",
+      }),
+    chiefComplaint: Joi.string().trim().required().messages({
+      "string.empty": "Chief complaint is required",
+      "any.required": "Chief complaint is required",
+    }),
+    pastMedicalHistory: Joi.string().allow(null, "").optional(),
+    familyMedicalHistory: Joi.string().allow(null, "").optional(),
+    physicalExamination: Joi.string().allow(null, "").optional(),
+  }).required(),
+  vitals: Joi.object({
+    bp: Joi.string().allow(null, "").optional(),
+    pulseRate: Joi.string().allow(null, "").optional(),
+    respiratoryRate: Joi.string().allow(null, "").optional(),
+    temperature: Joi.string().allow(null, "").optional(),
+    spo2: Joi.string().allow(null, "").optional(),
+    height: Joi.string().allow(null, "").optional(),
+    weight: Joi.string().allow(null, "").optional(),
+    bmi: Joi.string().allow(null, "").optional(),
+    investigationFindings: Joi.string().allow(null, "").optional(),
+  }).optional(),
+  diagnosis: Joi.object({
+    diagnosisNote: Joi.string().allow(null, "").optional(),
+    testsNote: Joi.string().allow(null, "").optional(),
+    PrescribeMedNotes: Joi.string().allow(null, "").optional(),
+    selectedTests: Joi.array().items(testValidationSchema).min(0).optional(),
+    medications: Joi.array().items(medicineValidationSchema).min(0).optional(),
+  })
     .optional()
-    .min(0),
-  tests: Joi.array()
-    .items(testValidationSchema)
-    .optional()
-    .min(0)
+    .allow(null),
+  advice: Joi.object({
+    advice: Joi.string().allow(null, "").optional(),
+    followUpDate: Joi.string().allow(null, "").optional(),
+  }).optional(),
+  createdBy: Joi.string().optional(),
+  updatedBy: Joi.string().optional(),
 });
 
 module.exports = {
   medicineValidationSchema,
   testValidationSchema,
-  prescriptionValidationSchema
+  prescriptionValidationSchema,
 };

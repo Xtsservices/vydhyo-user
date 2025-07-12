@@ -21,52 +21,6 @@ const eprescriptionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  doctorInfo: {
-    doctorName: {
-      type: String,
-      required: true
-    },
-    qualifications: {
-      type: String,
-      required: true
-    },
-    specialization: {
-      type: String,
-      required: true
-    },
-    reportDate: {
-      type: String,
-      required: true
-    },
-    reportTime: {
-      type: String,
-      required: true
-    },
-    selectedClinicId: {
-      type: String,
-      required: true
-    },
-    clinicName: {
-      type: String,
-      required: true
-    },
-    clinicAddress: {
-      type: String,
-      required: true
-    },
-    city: {
-      type: String,
-      required: true
-    },
-    pincode: {
-      type: String,
-      required: true
-    },
-    contactNumber: {
-      type: String,
-      required: true
-    }
-  },
   patientInfo: {
     patientName: {
       type: String,
@@ -140,56 +94,67 @@ const eprescriptionSchema = new mongoose.Schema({
     }
   },
   diagnosis: {
-    diagnosisList: {
-      type: String,
-      default: null
-    },
-    selectedTests: [
-      {
-        testName: {
-          type: String,
-          required: true
-        },
-        testInventoryId: {
-          type: String,
-          required: true
-        }
-      }
-    ]
-  },
-  medications: [
-    {
-      id: {
-        type: Number,
-        required: true
-      },
-      medName: {
+    type: new mongoose.Schema({
+      diagnosisNote: {
         type: String,
-        required: true
+        default: null
       },
-      quantity: {
-        type: Number,
-        required: true
-      },
-      dosage: {
+      testsNote: {
         type: String,
-        required: true
+        default: null
       },
-      duration: {
-        type: Number,
-        required: true
+      PrescribeMedNotes: {
+        type: String,
+        default: null
       },
-      timings: [
+      selectedTests: [
         {
-          type: String
+          testName: {
+            type: String,
+            required: true
+          },
+          testInventoryId: {
+            type: String,
+            required: true
+          }
         }
       ],
-      frequency: {
-        type: Number,
-        required: true
-      }
-    }
-  ],
+      medications: [
+        {
+          medInventoryId: {
+            type: String,
+            required: true
+          },
+          medName: {
+            type: String,
+            required: true
+          },
+          quantity: {
+            type: Number,
+            required: true
+          },
+          dosage: {
+            type: String,
+            required: true
+          },
+          duration: {
+            type: Number,
+            required: true
+          },
+          timings: [
+            {
+              type: String
+            }
+          ],
+          frequency: {
+            type: Number,
+            required: true
+          }
+        }
+      ]
+    }, { _id: false }),
+    default: null
+  },
   advice: {
     advice: {
       type: String,
