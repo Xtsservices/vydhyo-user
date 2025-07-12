@@ -244,80 +244,6 @@ exports.addMedInventoryBulk = [
   },
 ];
 
-/**
- * POST /addattach
- * Uploads a new attachment to S3 and returns its metadata
- */
-
-// exports.addattach = async (req, res) => {
-//   try {
-//     // Validate request
-//     if (!req.file) {
-//       return res.status(400).json({ error: "No file uploaded" });
-//     }
-    
-//     const { prescriptionId } = req.body;
-//     if (!prescriptionId) {
-//       await unlink(req.file.path);
-//       return res.status(400).json({ error: "Prescription ID is missing" });
-//     }
-
-//     console.log("req.file prescriptionId", prescriptionId);
-//     console.log("req.file", req.file);
-
-//     // Read file from disk
-//     const fileBuffer = fs.readFileSync(req.file.path);
-
-//     // Upload new attachment to S3
-//     const newAttachment = await uploadAttachmentToS3(
-//       fileBuffer,
-//       req.file.originalname,
-//       "prescriptions",
-//       '90d',
-//       req.file.mimetype
-//     );
-
-//     // Clean up the temporary file
-//     fs.unlinkSync(req.file.path);
-
-//     const  fileURL = newAttachment.fileURL;
-//     // this id we need to save into e-prescriptions
-
-//       const result = await eprescriptionsModel.updateOne(
-//       { prescriptionId: prescriptionId },
-//       { $set: { prescriptionAttachment: newAttachment } }
-//     );
-// console.log("result",result)
-
-//     res.status(200).json({
-//       message: "Attachment uploaded successfully",
-//       attachment: newAttachment,
-//       result:result
-//     });
-//   } catch (error) {
-//     // Clean up file in case of error
-//     if (req.file && req.file.path) {
-//       try {
-//         fs.unlinkSync(req.file.path);
-//       } catch (cleanupError) {
-//         console.error("Error cleaning up file:", cleanupError);
-//       }
-//     }
-//     console.error("Error in addattach:", error);
-//     res
-//       .status(500)
-//       .json({ error: `Failed to upload attachment: ${error.message}` });
-//   }
-// };
-
-
-
-
-
-
-
-
-
 
 exports.addattach = async (req, res) => {
   let fileDeleted = false; // Track if file was deleted
@@ -395,12 +321,6 @@ exports.addattach = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-
 
 //originnal
 exports.addPrescription = async (req, res) => {
