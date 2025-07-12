@@ -24,12 +24,27 @@ dotenv.config();
 const multer = require("multer");
 const xlsx = require("xlsx");
 const medInventoryValidationSchema = require("../schemas/medInventorySchema");
-
+const fs = require("fs");
 const eprescriptionsModel = require("../models/ePrescriptionModel");
-// Configure multer for file upload
+const {
+  fetchPrescriptionFromDatabase,
+  uploadAttachmentToS3,
+} = require("../utils/attachmentService");
+
+const { unlink } = require('fs').promises;
+
+// Configure Multer for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
+    if (file && allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only PDF, JPEG, and PNG are allowed."));
+    }
+  },
 });
 
 exports.addMedInventory = async (req, res) => {
@@ -229,8 +244,88 @@ exports.addMedInventoryBulk = [
   },
 ];
 
+
+exports.addattach = async (req, res) => {
+  let fileDeleted = false; // Track if file was deleted
+
+  try {
+    // Validate request
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+    if (!req.file.mimetype.includes("pdf")) {
+      await unlink(req.file.path).catch((err) => console.error("Cleanup error:", err));
+      return res.status(400).json({ error: "Only PDF files are allowed" });
+    }
+
+    const { prescriptionId } = req.body;
+    if (!prescriptionId) {
+      await unlink(req.file.path).catch((err) => console.error("Cleanup error:", err));
+      return res.status(400).json({ error: "Prescription ID is missing" });
+    }
+
+    console.log("req.file prescriptionId:", prescriptionId);
+    console.log("req.file:", req.file);
+
+    // Read file from disk
+    const fileBuffer = await fs.promises.readFile(req.file.path);
+
+    // Upload new attachment to S3
+    const newAttachment = await uploadAttachmentToS3(
+      fileBuffer,
+      req.file.originalname,
+      "prescriptions",
+      518400,
+      req.file.mimetype
+    );
+    if (!newAttachment?.fileURL) {
+      throw new Error("Failed to retrieve S3 file URL");
+    }
+
+    // Clean up the temporary file
+    await unlink(req.file.path);
+    fileDeleted = true; // Mark file as deleted
+
+    // Update prescription in database
+    const result = await eprescriptionsModel.updateOne(
+      { prescriptionId: prescriptionId }, // Use _id if that's the primary key
+      { $set: { prescriptionAttachment: newAttachment.fileURL } } // Store only fileURL
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Prescription not found" });
+    }
+
+    console.log("result:", result);
+
+    res.status(200).json({
+      message: "Attachment uploaded successfully",
+      attachment: newAttachment,
+      result
+    });
+  } catch (error) {
+    // Clean up file if not already deleted
+    if (req.file && req.file.path && !fileDeleted) {
+      try {
+        await unlink(req.file.path);
+        fileDeleted = true;
+      } catch (cleanupError) {
+        console.error("Error cleaning up file:", cleanupError);
+      }
+    }
+
+    console.error("Error in addattach:", error);
+    res.status(500).json({
+      error: "Failed to upload attachment",
+      details: error.message
+    });
+  }
+};
+
+//originnal
 exports.addPrescription = async (req, res) => {
   try {
+    console.log("req.body", req.body);
     const { error, value } = prescriptionValidationSchema.validate(req.body, {
       abortEarly: false,
       stripUnknown: true,
@@ -380,10 +475,11 @@ exports.addPrescription = async (req, res) => {
 
     res.status(201).json({
       success: true,
+      prescriptionId: eprescription.prescriptionId,
       message: "Prescription added successfully",
     });
   } catch (error) {
-    console.log("error",error)
+    console.log("error", error);
     if (error.code === 11000) {
       return res.status(400).json({
         status: "fail",
