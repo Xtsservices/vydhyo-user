@@ -8,7 +8,7 @@ const Users = require('../models/usersModel');
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'tech.vydhyo.in@gmail.com',
+        user: 'Vydhyoteams@gmail.com',
         pass: process.env.EMAIL_PASSWORD // Store password in environment variable
     }
 });
@@ -18,7 +18,7 @@ const transporter = nodemailer.createTransport({
 const sendStatusEmail = async (user, status, rejectionReason = '') => {
     try {
         let subject, html;
-        
+        console.log("subject=====", user)
         if (status === 'approved') {
             subject = 'Welcome to Vydhyo: Your Doctor Profile is Approved';
             html = `
@@ -38,13 +38,13 @@ const sendStatusEmail = async (user, status, rejectionReason = '') => {
                                 <p style="font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 15px;">Dear Dr. ${user.firstname} ${user.lastname},</p>
                                 <p style="font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 15px;">Congratulations! You have been successfully registered on the Vydhyo platform.</p>
                                 <p style="font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 15px;">You’re now ready to connect with patients and start giving appointments through our secure and easy-to-use platform. We’re excited to have you onboard as part of our growing network of trusted healthcare providers.</p>
-                                <p style="font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 25px;">If you need any assistance or wish to update your profile, our support team is just a click away. <a href="mailto:support@vydhyo.in" style="color: #28a745; text-decoration: none;">support@vydhyo.in</a>.</p>
+                                <p style="font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 0 0 25px;">If you need any assistance or wish to update your profile, our support team is just a click away. <a href="mailto:Vydhyoteams@gmail.com" style="color: #28a745; text-decoration: none;">Vydhyoteams@gmail.com</a>.</p>
                                 <p style="font-size: 15px; line-height: 1.6; color: #4a4a4a; margin: 25px 0 0;">Warm regards,<br>Team Vydhyo<br>Connect. Care. Cure.</p>
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 20px 30px; text-align: center; background-color: #f8f9fa; border-top: 1px solid #e9ecef;">
-                                <p style="font-size: 14px; color: #6c757d; margin: 0 0 10px;">For assistance, contact us at <a href="mailto:support@vydhyo.in" style="color: #28a745; text-decoration: none;">support@vydhyo.in</a></p>
+                                <p style="font-size: 14px; color: #6c757d; margin: 0 0 10px;">For assistance, contact us at <a href="mailto:Vydhyoteams@gmail.com" style="color: #28a745; text-decoration: none;">Vydhyoteams@gmail.com</a></p>
                                 <p style="font-size: 14px; color: #6c757d; margin: 0;">© ${new Date().getFullYear()} Vydhyo Healthcare. All rights reserved.</p>
                             </td>
                         </tr>
@@ -75,7 +75,7 @@ const sendStatusEmail = async (user, status, rejectionReason = '') => {
                                 <table role="presentation" cellspacing="0" cellpadding="0" style="margin: 20px auto;">
                                     <tr>
                                         <td style="border-radius: 6px; background-color: #dc3545; padding: 0;">
-                                            <a href="mailto:support@vydhyo.in" style="display: inline-block; padding: 12px 30px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 6px;">Contact Support</a>
+                                            <a href="mailto:Vydhyoteams@gmail.com" style="display: inline-block; padding: 12px 30px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 6px;">Contact Support</a>
                                         </td>
                                     </tr>
                                 </table>
@@ -84,7 +84,7 @@ const sendStatusEmail = async (user, status, rejectionReason = '') => {
                         </tr>
                         <tr>
                             <td style="padding: 20px 30px; text-align: center; background-color: #f8f9fa; border-top: 1px solid #e9ecef;">
-                                <p style="font-size: 14px; color: #6c757d; margin: 0 0 10px;">For assistance, contact us at <a href="mailto:support@vydhyo.in" style="color: #28a745; text-decoration: none;">support@vydhyo.in</a></p>
+                                <p style="font-size: 14px; color: #6c757d; margin: 0 0 10px;">For assistance, contact us at <a href="mailto:Vydhyoteams@gmail.com" style="color: #28a745; text-decoration: none;">support@vydhyo.in</a></p>
                                 <p style="font-size: 14px; color: #6c757d; margin: 0;">© ${new Date().getFullYear()} Vydhyo Healthcare. All rights reserved.</p>
                             </td>
                         </tr>
@@ -94,14 +94,14 @@ const sendStatusEmail = async (user, status, rejectionReason = '') => {
             `;
         }
 
-        await transporter.sendMail({
-            from: '"Vydhyo Healthcare" <tech.vydhyo.in@gmail.com>',
+      await transporter.sendMail({
+            from: '"Vydhyo Healthcare" <Vydhyoteams@gmail.com>',
             // to: 'pavanreddyr42@gmail.com',
+            // to: 'glalithakrishna04@gmail.com',
              to: user.email,
             subject: subject,
             html: html
         });
-        
         console.log(`Email sent to pavanreddyr42@gmail.com for ${status} status`);
     } catch (error) {
         console.error('Error sending email:', error);

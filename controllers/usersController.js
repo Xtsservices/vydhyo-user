@@ -16,13 +16,14 @@ const ePrescriptionModel = require('../models/ePrescriptionModel');
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'tech.vydhyo.in@gmail.com',
+        user: 'Vydhyoteams@gmail.com',
         pass: process.env.EMAIL_PASSWORD // Store password in environment variable
     }
 });
 
 // Function to send onboarding submission email
 const sendOnboardingEmail = async (user) => {
+  
     try {
         const subject = 'Vydhyo: Your Onboarding Profile Has Been Submitted';
         const html = `
@@ -63,15 +64,17 @@ const sendOnboardingEmail = async (user) => {
             </html>
         `;
 
-        await transporter.sendMail({
-            from: '"Vydhyo Healthcare" <tech.vydhyo.in@gmail.com>',
+       
+      await transporter.sendMail({
+            from: '"Vydhyo Healthcare" <Vydhyoteams@gmail.com>',
             // to: 'pavanreddyr42@gmail.com', // Replace with user.email for production
               to: user.email,
             subject: subject,
             html: html
         });
-        
+      
     } catch (error) {
+    
         console.error('Error sending onboarding email:', error);
     }
 };

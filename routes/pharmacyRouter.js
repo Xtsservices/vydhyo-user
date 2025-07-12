@@ -1,5 +1,5 @@
 const express = require("express");
-const { addMedInventory, addPrescription, getAllMedicinesByDoctorID, getAllPharmacyPatientsByDoctorID, pharmacyPayment, updatePatientMedicinePrice ,getPharmacyDetail, addMedInventoryBulk, getEPrescriptionByPatientId, getEPrescriptionByprescriptionId, addattach} = require("../controllers/pharmacyController");
+const { addMedInventory, addPrescription, getAllMedicinesByDoctorID, getAllPharmacyPatientsByDoctorID, pharmacyPayment, updatePatientMedicinePrice ,getPharmacyDetail, addMedInventoryBulk, getEPrescriptionByPatientId, getEPrescriptionByprescriptionId, getPatientPrescriptionDetails, addattach} = require("../controllers/pharmacyController");
 const router = express.Router();
 const multer = require("multer");
 const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporarily
@@ -19,5 +19,6 @@ router.post("/pharmacyPayment", pharmacyPayment);
 router.post("/updatePatientMedicinePrice", updatePatientMedicinePrice);
 
 router.get("/getPharmacyDetail", getPharmacyDetail);
+router.get("/getPatientPrescriptionDetails/:patientId", getPatientPrescriptionDetails);
 
 module.exports = router;
