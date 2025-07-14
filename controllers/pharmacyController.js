@@ -365,6 +365,7 @@ exports.addPrescription = async (req, res) => {
     // Save medicines if provided
     if (diagnosis?.medications && diagnosis.medications.length > 0) {
       for (const medicine of diagnosis.medications) {
+        console.log("medicine123====",medicine)
         const {
           id: medInventoryId,
           medName,
@@ -374,7 +375,7 @@ exports.addPrescription = async (req, res) => {
           timings,
           frequency,
         } = medicine;
-
+console.log("medicine====",medicine)
         const medCounter = await Counter.findByIdAndUpdate(
           { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
           { $inc: { seq: 1 } },

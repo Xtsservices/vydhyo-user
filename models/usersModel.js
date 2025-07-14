@@ -78,6 +78,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+   age: {
+    type: String,
+    default: null
+  },
   bloodgroup: {
     type: String,
     default: null
