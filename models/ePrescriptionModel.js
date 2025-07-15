@@ -151,7 +151,7 @@ const eprescriptionSchema = new mongoose.Schema({
               },
             ],
             frequency: {
-              type: Number,
+              type: String,
               required: true,
             },
           },

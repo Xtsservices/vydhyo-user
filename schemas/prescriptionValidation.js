@@ -16,6 +16,14 @@ const medicineValidationSchema = Joi.object({
     "number.min": "Quantity must be at least 1",
     "any.required": "Quantity is required",
   }),
+  medicineType: Joi.string()
+    .valid("Tablet", "Capsule", "Syrup", "Injection", "Cream", "Drops")
+    .required()
+    .messages({
+      "string.empty": "Medicine type is required",
+      "any.only": "Medicine type must be one of Tablet, Capsule, Syrup, Injection, Cream, Drops",
+      "any.required": "Medicine type is required",
+    }),
   dosage: Joi.string().trim().required().messages({
     "string.empty": "Dosage is required",
     "any.required": "Dosage is required",
@@ -31,12 +39,10 @@ const medicineValidationSchema = Joi.object({
     "array.min": "Timings must contain at least one entry",
     "any.required": "Timings is required",
   }),
-  frequency: Joi.number().integer().min(1).required().messages({
-    "number.base": "Frequency must be a number",
-    "number.integer": "Frequency must be an integer",
-    "number.min": "Frequency must be at least 1",
-    "any.required": "Frequency is required",
-  }),
+  frequency: Joi.string() .required().required().messages({
+      "string.empty": "Frequency is required",
+      "any.required": "Frequency is required",
+    }),
 });
 
 // Sub-schema for tests

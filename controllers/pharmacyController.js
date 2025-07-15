@@ -264,9 +264,7 @@ exports.addattach = async (req, res) => {
       return res.status(400).json({ error: "Prescription ID is missing" });
     }
 
-    console.log("req.file prescriptionId:", prescriptionId);
-    console.log("req.file:", req.file);
-
+  
     // Read file from disk
     const fileBuffer = await fs.promises.readFile(req.file.path);
 
@@ -296,7 +294,7 @@ exports.addattach = async (req, res) => {
       return res.status(404).json({ error: "Prescription not found" });
     }
 
-    console.log("result:", result);
+   
 
     res.status(200).json({
       message: "Attachment uploaded successfully",
@@ -338,8 +336,9 @@ exports.addPrescription = async (req, res) => {
         message: "Validation failed",
         errors: errorMessages,
       });
-    }
 
+    }
+  
     const {
       userId,
       doctorId,
@@ -365,17 +364,31 @@ exports.addPrescription = async (req, res) => {
     // Save medicines if provided
     if (diagnosis?.medications && diagnosis.medications.length > 0) {
       for (const medicine of diagnosis.medications) {
-        console.log("medicine123====",medicine)
+      
         const {
           id: medInventoryId,
           medName,
           quantity,
+            medicineType,
           dosage,
           duration,
           timings,
           frequency,
         } = medicine;
 console.log("medicine====",medicine)
+
+// Check if medInventory exists for this medName and doctorId
+        let inventory = await medInventoryModel.findOne({
+          medName,
+          doctorId,
+        });
+
+        // Use provided medInventoryId or existing inventory _id
+        let finalMedInventoryId = medInventoryId ? mongoose.Types.ObjectId(medInventoryId) : null;
+        if (!inventory && medInventoryId) {
+          inventory = await medInventoryModel.findById(medInventoryId);
+        }
+
         const medCounter = await Counter.findByIdAndUpdate(
           { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
           { $inc: { seq: 1 } },
@@ -383,11 +396,13 @@ console.log("medicine====",medicine)
         );
         const pharmacyMedID =
           PREFIX_SEQUENCE.MEDICINES_SEQUENCE.SEQUENCE.concat(medCounter.seq);
-
+console.log("===========97=====",pharmacyMedID)
         await new medicineModel({
-          medInventoryId: medInventoryId ? medInventoryId : null,
+          medInventoryId: finalMedInventoryId || (inventory ? inventory._id : null),
+          // medInventoryId: medInventoryId ? medInventoryId : null,
           medName,
           quantity,
+            medicineType,
           dosage,
           duration,
           timings: Array.isArray(timings) ? timings.join(", ") : timings, // Convert array to string
@@ -400,6 +415,8 @@ console.log("medicine====",medicine)
         }).save();
       }
     }
+console.log("===========97==6===")
+
 
     // Save tests if provided
     if (diagnosis?.selectedTests && diagnosis.selectedTests.length > 0) {

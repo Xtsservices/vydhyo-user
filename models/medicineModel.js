@@ -32,6 +32,14 @@ const medicineSchema = new mongoose.Schema(
       required: [true, 'Quantity is required'],
       min: [1, 'Quantity must be at least 1'],
     },
+     medicineType: {
+      type: String,
+      required: [true, 'Medicine type is required'],
+      enum: {
+        values: ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Drops'],
+        message: 'Medicine type must be one of Tablet, Capsule, Syrup, Injection, Cream, Drops',
+      },
+    },
      dosage: {
       type: String,
       required: [true, 'Dosage is required'],
@@ -51,13 +59,12 @@ const medicineSchema = new mongoose.Schema(
       required: [true, 'Timings is required'],
       trim: true,
     },
-    frequency: {
-      type: Number,
+   frequency: {
+      type: String,
       required: [true, 'Frequency is required'],
-      min: [1, 'Frequency must be at least 1'],
-      validate: {
-        validator: Number.isInteger,
-        message: 'Frequency must be an integer',
+      enum: {
+        values: ['1-0-0', '1-0-1', '1-1-1', '0-0-1', '0-1-0', '1-1-0', '0-1-1', 'SOS'],
+        message: 'Frequency must be one of 1-0-0, 1-0-1, 1-1-1, 0-0-1, 0-1-0, 1-1-0, 0-1-1, SOS',
       },
     },
     status: {
