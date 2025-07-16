@@ -119,7 +119,7 @@ exports.fetchMyDoctors = async (req, res) => {
   }
 };
 
-exports.fetchMyDoctorPatients = async (req, res) => {
+exports.fetchMyDoctorPatients2 = async (req, res) => {
   try {
     const doctorId = req.params.doctorId || req.headers.userid;
     console.log("doctorId", doctorId);
@@ -152,17 +152,17 @@ exports.fetchMyDoctorPatients = async (req, res) => {
       }
     );
      appointments = appointmentResponse.data.data || [];
-    console.log("appointmentResponse------1",appointmentResponse)
+    console.log("appointmentResponse------1",appointments[0])
 
     const appointmentPatientIds = appointmentResponse.data.data.map(
       (appointment) => appointment.userId
     );
 
-    console.log("appointmentPatientIds------1",appointmentPatientIds)
+    // console.log("appointmentPatientIds------1",appointmentPatientIds)
 
     // Combine and deduplicate patientIds
     const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds, ...appointmentPatientIds])];
-    console.log("patientIds------1",patientIds)
+    // console.log("patientIds------1",patientIds)
 
     // Combine and deduplicate patientIds
     // const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds])];
@@ -233,32 +233,60 @@ exports.fetchMyDoctorPatients = async (req, res) => {
           console.error(`Error fetching payments for patient ${patient.userId}:`, error.response?.status, error.message);
           payments = [];
         }
-        console.log("appointments----",appointments)
+        // console.log("appointments----",appointments)
         // Map appointments with payment details
-        const appointmentDetails = appointments.map((appointment) => {
-          const payment = payments.find((p) => p.appointmentId === appointment.appointmentId);
-          return {
-            appointmentId: appointment._id,
-            appointmentRefId: appointment.appointmentId,
-            appointmentType: appointment.appointmentType,
-            appointmentDate: appointment.appointmentDate,
-            appointmentTime: appointment.appointmentTime,
-            appointmentStatus: appointment.appointmentStatus,
-            createdAt: appointment.createdAt,
-            feeDetails: payment
-              ? {
-                  actualAmount: payment.actualAmount,
-                  discount: payment.discount,
-                  discountType: payment.discountType,
-                  finalAmount: payment.finalAmount,
-                  paymentStatus: payment.paymentStatus,
-                  paidAt: payment.paidAt,
-                }
-              : null,
-          };
-        });
+        // const appointmentDetails = appointments.map((appointment) => {
+        //   const payment = payments.find((p) => p.appointmentId === appointment.appointmentId);
+        //   return {
+        //     appointmentId: appointment._id,
+        //     appointmentRefId: appointment.appointmentId,
+        //     appointmentType: appointment.appointmentType,
+        //     appointmentDate: appointment.appointmentDate,
+        //     appointmentTime: appointment.appointmentTime,
+        //     appointmentStatus: appointment.appointmentStatus,
+        //     createdAt: appointment.createdAt,
+        //     feeDetails: payment
+        //       ? {
+        //           actualAmount: payment.actualAmount,
+        //           discount: payment.discount,
+        //           discountType: payment.discountType,
+        //           finalAmount: payment.finalAmount,
+        //           paymentStatus: payment.paymentStatus,
+        //           paidAt: payment.paidAt,
+        //         }
+        //       : null,
+        //   };
+        // });
 
-console.log("appointmentDetails====",appointmentDetails)
+        const patientAppointments = appointments.filter(
+  (appt) => appt.userId === patient.userId
+);
+
+const appointmentDetails = patientAppointments.map((appointment) => {
+  const payment = payments.find((p) => p.appointmentId === appointment.appointmentId);
+  return {
+    appointmentId: appointment._id,
+    appointmentRefId: appointment.appointmentId,
+    appointmentType: appointment.appointmentType,
+    appointmentDate: appointment.appointmentDate,
+    appointmentTime: appointment.appointmentTime,
+    appointmentStatus: appointment.appointmentStatus,
+    createdAt: appointment.createdAt,
+    feeDetails: payment
+      ? {
+          actualAmount: payment.actualAmount,
+          discount: payment.discount,
+          discountType: payment.discountType,
+          finalAmount: payment.finalAmount,
+          paymentStatus: payment.paymentStatus,
+          paidAt: payment.paidAt,
+        }
+      : null,
+  };
+});
+
+
+// console.log("appointmentDetails====",appointmentDetails)
           
         // Format patient data
         return {
@@ -307,6 +335,203 @@ console.log("appointmentDetails====",appointmentDetails)
   }
 };
 
+exports.fetchMyDoctorPatients = async (req, res) => {
+  try {
+    const doctorId = req.params.doctorId || req.headers.userid;
+    console.log("doctorId", doctorId);
+
+    if (!doctorId) {
+      return res.status(400).json({ error: "Invalid Doctor ID" });
+    }
+
+    // Collect patientIds from test and medicine data
+    const testPatientIds = await PatientTest.find({
+      doctorId,
+      isDeleted: false,
+    }).distinct("patientId");
+
+    const medicinePatientIds = await Medicine.find({
+      doctorId,
+      isDeleted: false,
+    }).distinct("patientId");
+
+    // Appointments
+    let appointments = [];
+    try {
+      const appointmentResponse = await axios.get(
+        `${process.env.APPOINTMENTS_SERVICE_URL}/appointment/getAppointmentsByDoctor/${doctorId}`,
+        {
+          headers: {
+            Authorization: req.headers.authorization,
+          },
+        }
+      );
+      appointments = appointmentResponse.data.data || [];
+    } catch (err) {
+      console.error("Error fetching appointments:", err.message);
+    }
+
+    const appointmentPatientIds = appointments.map((appt) => appt.userId);
+
+    // Merge and deduplicate all patientIds
+    const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds, ...appointmentPatientIds])];
+
+    if (!patientIds.length) {
+      return res.status(404).json({ message: "No patients found for this doctor" });
+    }
+
+    // Fetch patient details
+    const patients = await User.find({
+      role: "patient",
+      userId: { $in: patientIds },
+      isDeleted: false,
+    }).select("firstname lastname email userId DOB gender bloodgroup mobile");
+
+    if (!patients.length) {
+      return res.status(404).json({ message: "No patients found for this doctor" });
+    }
+
+    // Build patient data
+    const patientDetails = await Promise.all(
+      patients.map(async (patient) => {
+        const patientId = patient.userId;
+
+        // Fetch tests
+        const tests = await PatientTest.find({
+          patientId,
+          doctorId,
+          isDeleted: false,
+        })
+          .populate({
+            path: "testInventoryId",
+            model: TestInventory,
+            select: "testName testPrice",
+          })
+          .select("testName status createdAt testInventoryId labTestID _id");
+
+        // Fetch medicines
+        const medicines = await Medicine.find({
+          patientId,
+          doctorId,
+          isDeleted: false,
+        })
+          .populate({
+            path: "medInventoryId",
+            model: MedInventory,
+            select: "medName price",
+          })
+          .select("medName quantity status createdAt medInventoryId pharmacyMedID _id");
+
+        // Skip patient if no tests and no medicines
+        if (tests.length === 0 && medicines.length === 0) {
+          console.log(`Skipping patient ${patientId}: No tests or medicines`);
+          return null;
+        }
+
+        // Filter appointments for this patient
+        const patientAppointments = appointments.filter(
+          (appt) => appt.userId === patientId
+        );
+
+        // Fetch payments
+        let payments = [];
+        try {
+          const paymentResponse = await axios.get(
+            `${process.env.FINANCE_SERVICE_URL}/finance/getPaymentsByDoctorAndUser/${doctorId}`,
+            {
+              headers: {
+                Authorization: req.headers.authorization,
+              },
+            }
+          );
+          payments = paymentResponse.data.data || [];
+        } catch (error) {
+          console.error(`Error fetching payments for patient ${patientId}:`, error.message);
+        }
+
+        // Build appointment details
+        const appointmentDetails = patientAppointments.map((appointment) => {
+          const payment = payments.find(
+            (p) => p.appointmentId === appointment.appointmentId
+          );
+          return {
+            appointmentId: appointment._id,
+            appointmentRefId: appointment.appointmentId,
+            appointmentType: appointment.appointmentType,
+            appointmentDate: appointment.appointmentDate,
+            appointmentTime: appointment.appointmentTime,
+            appointmentStatus: appointment.appointmentStatus,
+            createdAt: appointment.createdAt,
+            feeDetails: payment
+              ? {
+                  actualAmount: payment.actualAmount,
+                  discount: payment.discount,
+                  discountType: payment.discountType,
+                  finalAmount: payment.finalAmount,
+                  paymentStatus: payment.paymentStatus,
+                  paidAt: payment.paidAt,
+                }
+              : null,
+          };
+        });
+
+        // Build base patient object
+        const patientData = {
+          patientId: patient.userId,
+          firstname: patient.firstname,
+          lastname: patient.lastname,
+          mobile: patient.mobile,
+          email: patient.email,
+          DOB: patient.DOB,
+          gender: patient.gender,
+          bloodgroup: patient.bloodgroup,
+          appointments: appointmentDetails,
+        };
+
+        // Add tests if present
+        if (tests.length > 0) {
+          patientData.tests = tests.map((test) => ({
+            testId: test._id,
+            labTestID: test.labTestID,
+            testName: test.testName,
+            status: test.status,
+            price: test.testInventoryId?.testPrice ?? null,
+            createdAt: test.createdAt,
+          }));
+        }
+
+        // Add medicines if present
+        if (medicines.length > 0) {
+          patientData.medicines = medicines.map((med) => ({
+            medicineId: med._id,
+            pharmacyMedID: med.pharmacyMedID,
+            medName: med.medName,
+            quantity: med.quantity,
+            status: med.status,
+            price: med.medInventoryId?.price ?? null,
+            createdAt: med.createdAt,
+          }));
+        }
+
+        return patientData;
+      })
+    );
+
+    // Filter out patients with no data
+    const filteredPatientDetails = patientDetails.filter(Boolean);
+
+    return res.status(200).json({
+      success: true,
+      data: filteredPatientDetails,
+    });
+  } catch (error) {
+    console.error("Error fetching doctor patients:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+    });
+  }
+};
 
 
 exports.totalBillPayFromReception = async (req, res) => {
