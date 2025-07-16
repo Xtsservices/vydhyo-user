@@ -527,7 +527,7 @@ const processPayment = async (req, res) => {
           userId: patientId,
           doctorId,
           labTestID,
-          actualAmount: amount,
+          actualAmount: price || amount,
           discount: discount || 0,
           discountType: discountType || "percentage",
           paymentStatus: "paid",

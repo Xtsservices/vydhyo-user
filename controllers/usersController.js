@@ -543,7 +543,7 @@ exports.getUsersDetailsByIds = async (req, res) => {
     }
 
     const users = await Users.find({ userId: { $in: userIds }, isDeleted: false })
-      .select('userId firstname lastname DOB mobile gender');
+      .select('userId firstname lastname DOB mobile gender age');
 
     return res.status(200).json({
       status: 'success',

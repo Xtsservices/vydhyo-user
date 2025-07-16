@@ -2,9 +2,12 @@ const Joi = require("joi");
 
 // Sub-schema for medications
 const medicineValidationSchema = Joi.object({
-  medInventoryId: Joi.string().required().messages({
+  // medInventoryId: Joi.string().required().messages({
+  //   "string.base": "Medication ID must be a string",
+  //   "any.required": "Medication ID is required",
+  // }),
+   medInventoryId: Joi.string().allow(null, "").optional().messages({
     "string.base": "Medication ID must be a string",
-    "any.required": "Medication ID is required",
   }),
   medName: Joi.string().trim().required().messages({
     "string.empty": "Medicine name is required",

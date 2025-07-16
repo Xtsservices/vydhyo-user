@@ -34,7 +34,7 @@ const {
 const { unlink } = require('fs').promises;
 
 // Configure Multer for file uploads
-const upload = multer({
+const upload2 = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
@@ -45,6 +45,11 @@ const upload = multer({
       cb(new Error("Invalid file type. Only PDF, JPEG, and PNG are allowed."));
     }
   },
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
 exports.addMedInventory = async (req, res) => {
@@ -782,7 +787,7 @@ exports.pharmacyPayment = async (req, res) => {
           userId: patientId,
           doctorId,
           pharmacyMedID,
-          actualAmount: amount,
+          actualAmount: price || amount,
           discount: discount || 0,
           discountType: discountType || "percentage",
           paymentStatus: "paid",

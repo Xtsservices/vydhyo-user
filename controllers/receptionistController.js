@@ -12,7 +12,7 @@ const MedInventory = require("../models/medInventoryModel");
 const Users = require("../models/usersModel")
 const patientTestModel = require("../models/patientTestModel");
 const { createPayment } = require("../services/paymentServices");
-
+const axios = require('axios'); 
 
 exports.updateReceptionist = async (req, res) => {
   try {
@@ -139,8 +139,33 @@ exports.fetchMyDoctorPatients = async (req, res) => {
       isDeleted: false,
     }).distinct('patientId');
 
+    console.log("am------1")
+    console.log("am------3",process.env.APPOINTMENTS_SERVICE_URL)
+  let appointments = [];
+    // Fetch appointment patientIds from appointments service
+    const appointmentResponse = await axios.get(
+      `${process.env.APPOINTMENTS_SERVICE_URL}/appointment/getAppointmentsByDoctor/${doctorId}`,
+      {
+        headers: {
+          Authorization: req.headers.authorization, // Pass the JWT token
+        },
+      }
+    );
+     appointments = appointmentResponse.data.data || [];
+    console.log("appointmentResponse------1",appointmentResponse)
+
+    const appointmentPatientIds = appointmentResponse.data.data.map(
+      (appointment) => appointment.userId
+    );
+
+    console.log("appointmentPatientIds------1",appointmentPatientIds)
+
     // Combine and deduplicate patientIds
-    const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds])];
+    const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds, ...appointmentPatientIds])];
+    console.log("patientIds------1",patientIds)
+
+    // Combine and deduplicate patientIds
+    // const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds])];
 
     // If no patients found
     if (!patientIds || patientIds.length === 0) {
@@ -190,6 +215,51 @@ exports.fetchMyDoctorPatients = async (req, res) => {
           })
           .select("medName quantity status createdAt medInventoryId pharmacyMedID _id");
 
+          // Fetch payments for the patient
+        let payments = [];
+        try {
+          const paymentResponse = await axios.get(
+            `${process.env.FINANCE_SERVICE_URL}/finance/getPaymentsByDoctorAndUser/${doctorId}`,
+            {
+              headers: {
+                Authorization: req.headers.authorization,
+              },
+            }
+          );
+          payments = paymentResponse.data.data || [];
+// console.log("paymentResponse====",payments)
+
+        } catch (error) {
+          console.error(`Error fetching payments for patient ${patient.userId}:`, error.response?.status, error.message);
+          payments = [];
+        }
+        console.log("appointments----",appointments)
+        // Map appointments with payment details
+        const appointmentDetails = appointments.map((appointment) => {
+          const payment = payments.find((p) => p.appointmentId === appointment.appointmentId);
+          return {
+            appointmentId: appointment._id,
+            appointmentRefId: appointment.appointmentId,
+            appointmentType: appointment.appointmentType,
+            appointmentDate: appointment.appointmentDate,
+            appointmentTime: appointment.appointmentTime,
+            appointmentStatus: appointment.appointmentStatus,
+            createdAt: appointment.createdAt,
+            feeDetails: payment
+              ? {
+                  actualAmount: payment.actualAmount,
+                  discount: payment.discount,
+                  discountType: payment.discountType,
+                  finalAmount: payment.finalAmount,
+                  paymentStatus: payment.paymentStatus,
+                  paidAt: payment.paidAt,
+                }
+              : null,
+          };
+        });
+
+console.log("appointmentDetails====",appointmentDetails)
+          
         // Format patient data
         return {
           patientId: patient.userId,
@@ -217,6 +287,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             price: medicine.medInventoryId ? medicine.medInventoryId.price : null,
             createdAt: medicine.createdAt,
           })),
+           appointments: appointmentDetails,
         };
       })
     );
@@ -228,12 +299,14 @@ exports.fetchMyDoctorPatients = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching doctor patients:", error);
+    console.log("Error fetching doctor patients:", error);
     return res.status(500).json({
       success: false,
       error: "Internal Server Error",
     });
   }
 };
+
 
 
 exports.totalBillPayFromReception = async (req, res) => {

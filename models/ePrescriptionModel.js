@@ -119,7 +119,8 @@ const eprescriptionSchema = new mongoose.Schema({
             },
             testInventoryId: {
               type: String,
-              required: true,
+                default: null,
+              // required: true,
             },
           },
         ],
@@ -127,7 +128,8 @@ const eprescriptionSchema = new mongoose.Schema({
           {
             medInventoryId: {
               type: String,
-              required: true,
+               default: null,
+              // required: true,
             },
             medName: {
               type: String,
