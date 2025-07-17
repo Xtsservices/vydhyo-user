@@ -949,7 +949,7 @@ exports.pharmacyPayment = async (req, res) => {
     const updatedMedicines = [];
 
     for (const medicine of medicines) {
-      const { medicineId, price, pharmacyMedID } = medicine;
+      const { medicineId, price, pharmacyMedID, quantity } = medicine;
 
       console.log("price", price, medicineId, patientId, doctorId);
       const updateData = {
@@ -978,7 +978,7 @@ exports.pharmacyPayment = async (req, res) => {
           userId: patientId,
           doctorId,
           pharmacyMedID,
-          actualAmount: price || amount,
+          actualAmount: price*quantity || amount,
           discount: discount || 0,
           discountType: discountType || "percentage",
           paymentStatus: "paid",
