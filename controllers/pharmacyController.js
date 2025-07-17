@@ -32,6 +32,9 @@ const {
 } = require("../utils/attachmentService");
 
 const { unlink } = require('fs').promises;
+// import fs from 'fs';
+// import path from 'path';
+// import FormData from 'form-data';
 
 // Configure Multer for file uploads
 const upload2 = multer({
@@ -285,6 +288,11 @@ exports.addattach = async (req, res) => {
       throw new Error("Failed to retrieve S3 file URL");
     }
 
+  //  let whatsappmediaID= await this.uploadImageToAirtelAPI(req.file.path)
+
+  //  let sendWhatsQrAppMessage = await this.sendWhatsQrAppMessage(req.body,whatsappmediaID)
+
+
     // Clean up the temporary file
     await unlink(req.file.path);
     fileDeleted = true; // Mark file as deleted
@@ -322,6 +330,189 @@ exports.addattach = async (req, res) => {
       error: "Failed to upload attachment",
       details: error.message
     });
+  }
+};
+
+exports.uploadImageToAirtelAPI = async (filePath) => {
+  const url = 'https://iqwhatsapp.airtel.in:443/gateway/airtel-xchange/whatsapp-content-manager/v1/media';
+  const username = 'world_tek'; 
+  const password = 'T7W9&w3396Y"'; 
+
+  const auth = Buffer.from(`${username}:${password}`).toString('base64');
+
+  // Create FormData for the API request
+  const formData = new FormData();
+  formData.append('customerId', 'KWIKTSP_CO_j3og3FCEU1TsAz1EO7wQ');
+  formData.append('phoneNumber', '918686078782');
+  formData.append('mediaType', 'IMAGE');
+  formData.append('messageType', 'TEMPLATE_MESSAGE');
+  
+  try {
+    // Construct path to file in upload folder
+    const uploadDir = path.join(__dirname, '../uploads');
+    
+    // Check if directory exists, if not create it
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+      console.log(`Created directory: ${uploadDir}`);
+    }
+    
+    const fullPath = filePath || path.join(uploadDir, 'default.png');
+    
+    // Check if file exists
+    if (!fs.existsSync(fullPath)) {
+      console.log(`File not found: ${fullPath}`);
+      
+      // Use a default image instead - create a simple 1x1 pixel PNG
+      const defaultImagePath = path.join(uploadDir, 'default.png');
+      
+      // Create a simple pixel image if it doesn't exist
+      if (!fs.existsSync(defaultImagePath)) {
+        // This is a minimal valid PNG file (1x1 transparent pixel)
+        const minimalPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+        fs.writeFileSync(defaultImagePath, minimalPng);
+        console.log(`Created default image: ${defaultImagePath}`);
+      }
+      
+      formData.append('file', fs.createReadStream(defaultImagePath));
+      console.log(`Using default image instead: ${defaultImagePath}`);
+    } else {
+      formData.append('file', fs.createReadStream(fullPath));
+      console.log(`Using original image: ${fullPath}`);
+    }
+
+    console.log('Uploading image to Airtel API...');  
+
+    const response = await axios.post(url, formData, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        ...formData.getHeaders(),
+      },
+    });
+
+
+    // Return the media ID from the response
+    if (response.data && response.data.id) {
+      // If upload was successful, remove the file to avoid cluttering
+      // Only delete if it's not the default image
+      if (fullPath !== path.join(uploadDir, 'default.png')) {
+        try {
+         // fs.unlinkSync(fullPath);
+        } catch (deleteError) {
+          // Continue execution even if file deletion fails
+        }
+      }
+      return response.data.id;
+    } else {
+      throw new Error('❌ Media ID not returned by Airtel API.');
+    }
+  } catch (error) {
+    console.error('❌ Error uploading image to Airtel API:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+
+exports.sendWhatsQrAppMessage = async (order, whatsappuploadedid) => {
+  const userId = order.userId; // Extract userId from the order object
+  const user = await User.findOne({ where: { id: userId } }); // Fetch user details from the User table
+  const phoneNumber = user?.mobile; // Get the phone number from the user details
+
+  const name =
+    user?.firstName && user?.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : "User"; // Default to 'User' if name doesn't exist
+
+  let OrderNo = "NV".concat(order.id.toString());
+  let toNumber = "91".concat(phoneNumber);
+
+
+    sendImageWithAttachment(
+      toNumber,
+      "01jzzt1qq204fz496stragvr8x",
+      [name,doctorfirstname,doctorlastname],
+      [],
+      whatsappuploadedid
+    );
+
+
+  // const url = 'https://iqwhatsapp.airtel.in/gateway/airtel-xchange/basic/whatsapp-manager/v1/session/send/media';
+  // const username = 'world_tek';
+  // const password = 'T7W9&w3396Y"'; // Replace with actual password
+
+  // const auth = Buffer.from(`${username}:${password}`).toString('base64');
+
+  // const payload = {
+  //   sessionId: generateUuid(),
+  //   to: "91".concat(phoneNumber), // Recipient number
+  //   from: "918686078782", // Dynamically set the sender number
+  //   message: {
+  //     text: 'Your Order is Placed', // Message text
+  //   },
+  //   mediaAttachment: {
+  //       "type": "IMAGE",
+  //       "id": "https://welfarecanteen.in/public/Naval.jpg"
+  //   }
+  // };
+  // console.log('WhatsApp Payload:', payload);
+  // console.log('WhatsApp URL:', url);
+  // try {
+  //   const response = await axios.post(url, payload, {
+  //     headers: {
+  //       Authorization: `Basic ${auth}`,
+  //       'Content-Type': 'application/json',
+  //     },
+  //   });
+
+  //    console.log('Message sent successfully:', response.data);
+  // } catch (error: any) {
+  //   console.error('Error sending message:', error.response?.data || error.message);
+  //   throw error;
+  // }
+};
+
+
+exports.sendImageWithAttachment = async (
+  to,
+  templateId,
+  variables,
+  payload,
+  whatsappuploadedid = null
+) => {
+  const url = 'https://iqwhatsapp.airtel.in/gateway/airtel-xchange/basic/whatsapp-manager/v1/template/send';
+  const username = 'world_tek'; // Replace with your Airtel username
+  const password = 'T7W9&w3396Y"'; // Replace with your Airtel password
+
+  const auth = Buffer.from(`${username}:${password}`).toString('base64');
+
+  const headers = {
+    Authorization: `Basic ${auth}`,
+    'Content-Type': 'application/json',
+  };
+  console.log("to number",to)
+  // Payload for the API
+  const payloadData = {
+    templateId,
+    to,
+    from: '918686078782', // Replace with your Airtel-registered number
+    message: {
+      headerVars: [],
+      variables,
+      payload,
+    },
+    ...(whatsappuploadedid && {
+      mediaAttachment: {
+        type: "IMAGE",
+        id: whatsappuploadedid
+      }
+    })
+  };
+
+  try {
+    const response = await axios.post(url, payloadData, { headers });
+  } catch (error) {
+    console.error('❌ Error sending message with attachment:', error.response?.data || error.message);
+    throw error;
   }
 };
 
