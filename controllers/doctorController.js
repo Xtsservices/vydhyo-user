@@ -92,6 +92,7 @@ exports.searchAndFetchUser = async (req, res) => {
     if (req.headers.role == 'receptionist') {
       obj.role = 'patient'
     }
+     obj.role = 'patient'
     if (req.query?.mobile) {
       obj.mobile = req.query.mobile
     }
