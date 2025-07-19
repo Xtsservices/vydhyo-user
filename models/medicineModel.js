@@ -27,6 +27,12 @@ const medicineSchema = new mongoose.Schema(
       required: [true, 'Doctor ID is required'],
       index: true,
     },
+     prescriptionId: {
+      type: String,
+      required: [true, "Prescription ID is required"],
+      trim: true,
+      index: true,
+    },
     quantity: {
       type: Number,
       required: [true, 'Quantity is required'],

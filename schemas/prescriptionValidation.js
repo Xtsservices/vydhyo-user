@@ -103,10 +103,7 @@ const prescriptionValidationSchema = Joi.object({
         "string.pattern.base": "Mobile number must be a 10-digit number",
         "any.required": "Mobile number is required",
       }),
-    chiefComplaint: Joi.string().trim().required().messages({
-      "string.empty": "Chief complaint is required",
-      "any.required": "Chief complaint is required",
-    }),
+      chiefComplaint: Joi.string().allow('').optional(),
     pastMedicalHistory: Joi.string().allow(null, "").optional(),
     familyMedicalHistory: Joi.string().allow(null, "").optional(),
     physicalExamination: Joi.string().allow(null, "").optional(),

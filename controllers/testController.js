@@ -425,6 +425,8 @@ const updatePatientTestPrice = async (req, res) => {
       });
     }
 
+    console.log(test, " ")
+
     // Step 5: Update the patient test record with price and inventory reference
     const updatedPatientTest = await patientTestModel.findOneAndUpdate(
       { _id: testId, patientId },

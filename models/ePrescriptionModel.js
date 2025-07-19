@@ -43,7 +43,7 @@ const eprescriptionSchema = new mongoose.Schema({
     },
     chiefComplaint: {
       type: String,
-      required: true,
+  default: '',
     },
     pastMedicalHistory: {
       type: String,
@@ -133,6 +133,10 @@ const eprescriptionSchema = new mongoose.Schema({
             },
             medName: {
               type: String,
+              required: true,
+            },
+            medicineType :{
+  type: String,
               required: true,
             },
             quantity: {

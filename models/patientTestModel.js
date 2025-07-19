@@ -31,6 +31,12 @@ const patientTestSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+     prescriptionId: {
+      type: String,
+      required: [true, "Prescription ID is required"],
+      trim: true,
+      index: true,
+    },
     status: {
       type: String,
       enum: ["pending", "in-progress", "completed", "cancelled"],

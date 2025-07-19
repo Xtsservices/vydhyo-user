@@ -462,6 +462,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             appointmentTime: appointment.appointmentTime,
             appointmentStatus: appointment.appointmentStatus,
             createdAt: appointment.createdAt,
+            addressId: appointment.addressId,
             feeDetails: payment
               ? {
                   actualAmount: payment.actualAmount,

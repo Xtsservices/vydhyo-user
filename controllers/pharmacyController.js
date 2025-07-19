@@ -32,6 +32,9 @@ const {
 } = require("../utils/attachmentService");
 
 const { unlink } = require('fs').promises;
+const path = require('path')
+const FormData = require('form-data');
+// const { fromFile } = require('file-type');
 // import fs from 'fs';
 // import path from 'path';
 // import FormData from 'form-data';
@@ -261,6 +264,8 @@ exports.addattach = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
+    console.log("first", req.file)
+    console.log("req.file.mimetype",req.file.mimetype)
     if (!req.file.mimetype.includes("pdf")) {
       await unlink(req.file.path).catch((err) => console.error("Cleanup error:", err));
       return res.status(400).json({ error: "Only PDF files are allowed" });
@@ -277,20 +282,20 @@ exports.addattach = async (req, res) => {
     const fileBuffer = await fs.promises.readFile(req.file.path);
 
     // Upload new attachment to S3
-    const newAttachment = await uploadAttachmentToS3(
-      fileBuffer,
-      req.file.originalname,
-      "prescriptions",
-      518400,
-      req.file.mimetype
-    );
-    if (!newAttachment?.fileURL) {
-      throw new Error("Failed to retrieve S3 file URL");
-    }
+    // const newAttachment = await uploadAttachmentToS3(
+    //   fileBuffer,
+    //   req.file.originalname,
+    //   "prescriptions",
+    //   518400,
+    //   req.file.mimetype
+    // );
+    // if (!newAttachment?.fileURL) {
+    //   throw new Error("Failed to retrieve S3 file URL");
+    // }
 
-  //  let whatsappmediaID= await this.uploadImageToAirtelAPI(req.file.path)
+   let whatsappmediaID= await this.uploadImageToAirtelAPI(req.file.path)
 
-  //  let sendWhatsQrAppMessage = await this.sendWhatsQrAppMessage(req.body,whatsappmediaID)
+   let sendWhatsQrAppMessage = await this.sendWhatsQrAppMessage(req.body,whatsappmediaID)
 
 
     // Clean up the temporary file
@@ -298,21 +303,21 @@ exports.addattach = async (req, res) => {
     fileDeleted = true; // Mark file as deleted
 
     // Update prescription in database
-    const result = await eprescriptionsModel.updateOne(
-      { prescriptionId: prescriptionId }, // Use _id if that's the primary key
-      { $set: { prescriptionAttachment: newAttachment.fileURL } } // Store only fileURL
-    );
+    // const result = await eprescriptionsModel.updateOne(
+    //   { prescriptionId: prescriptionId }, // Use _id if that's the primary key
+    //   { $set: { prescriptionAttachment: newAttachment.fileURL } } // Store only fileURL
+    // );
 
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "Prescription not found" });
-    }
+    // if (result.matchedCount === 0) {
+    //   return res.status(404).json({ error: "Prescription not found" });
+    // }
 
    
 
     res.status(200).json({
       message: "Attachment uploaded successfully",
-      attachment: newAttachment,
-      result
+      // attachment: newAttachment,
+      // result
     });
   } catch (error) {
     // Clean up file if not already deleted
@@ -344,24 +349,40 @@ exports.uploadImageToAirtelAPI = async (filePath) => {
   const formData = new FormData();
   formData.append('customerId', 'KWIKTSP_CO_j3og3FCEU1TsAz1EO7wQ');
   formData.append('phoneNumber', '918686078782');
-  formData.append('mediaType', 'IMAGE');
+  formData.append('mediaType', 'DOCUMENT');
   formData.append('messageType', 'TEMPLATE_MESSAGE');
   
   try {
     // Construct path to file in upload folder
     const uploadDir = path.join(__dirname, '../uploads');
-    
-    // Check if directory exists, if not create it
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-      console.log(`Created directory: ${uploadDir}`);
+
+    // Default PDF file to use if no filePath is provided
+    const pdfFilePath = path.isAbsolute(filePath)
+  ? filePath
+  : path.join(__dirname, '..', filePath);
+
+    console.log("Resolved PDF path:", pdfFilePath);
+
+    if (!fs.existsSync(pdfFilePath)) {
+      throw new Error(`❌ File not found: ${pdfFilePath}`);
     }
-    
-    const fullPath = filePath || path.join(uploadDir, 'default.png');
-    
+
+    formData.append('file', fs.createReadStream(pdfFilePath));
+    console.log(`✅ Uploading file: ${pdfFilePath}`);
+
+ 
+    // Check if directory exists, if not create it
+    // if (!fs.existsSync(uploadDir)) {
+    //   fs.mkdirSync(uploadDir, { recursive: true });
+    //   console.log(`Created directory: ${uploadDir}`);
+    // }
+    // console.log("filePath==",filePath)
+    // const fullPath = filePath || path.join(uploadDir, 'default.png');
+    // console.log("fullPath==",fullPath)
+   
     // Check if file exists
-    if (!fs.existsSync(fullPath)) {
-      console.log(`File not found: ${fullPath}`);
+    if (!fs.existsSync(pdfFilePath)) {
+      console.log(`File not found: ${pdfFilePath}`);
       
       // Use a default image instead - create a simple 1x1 pixel PNG
       const defaultImagePath = path.join(uploadDir, 'default.png');
@@ -377,8 +398,8 @@ exports.uploadImageToAirtelAPI = async (filePath) => {
       formData.append('file', fs.createReadStream(defaultImagePath));
       console.log(`Using default image instead: ${defaultImagePath}`);
     } else {
-      formData.append('file', fs.createReadStream(fullPath));
-      console.log(`Using original image: ${fullPath}`);
+      formData.append('file', fs.createReadStream(pdfFilePath));
+      console.log(`Using original image: ${pdfFilePath}`);
     }
 
     console.log('Uploading image to Airtel API...');  
@@ -395,7 +416,7 @@ exports.uploadImageToAirtelAPI = async (filePath) => {
     if (response.data && response.data.id) {
       // If upload was successful, remove the file to avoid cluttering
       // Only delete if it's not the default image
-      if (fullPath !== path.join(uploadDir, 'default.png')) {
+      if (pdfFilePath !== path.join(uploadDir, 'default.png')) {
         try {
          // fs.unlinkSync(fullPath);
         } catch (deleteError) {
@@ -517,7 +538,7 @@ exports.sendImageWithAttachment = async (
 };
 
 //originnal
-exports.addPrescription = async (req, res) => {
+exports.addPrescription2 = async (req, res) => {
   try {
     console.log("req.body", req.body);
     const { error, value } = prescriptionValidationSchema.validate(req.body, {
@@ -546,6 +567,7 @@ exports.addPrescription = async (req, res) => {
       advice,
     } = value;
 
+    
     // Generate unique prescriptionId
     const prescriptionCounter = await Counter.findByIdAndUpdate(
       { _id: PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.EPRESCRIPTION_MODEL },
@@ -708,6 +730,379 @@ console.log("===========97==6===")
   }
 };
 
+exports.addPrescription = async (req, res) => {
+  try {
+    console.log("req.body", req.body);
+    const { error, value } = prescriptionValidationSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      const errorMessages = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        status: "fail",
+        message: "Validation failed",
+        errors: errorMessages,
+      });
+    }
+console.log("first")
+    const {
+      userId,
+      doctorId,
+      appointmentId,
+      addressId,
+      patientInfo,
+      vitals,
+      diagnosis,
+      advice,
+    } = value;
+console.log("first2")
+
+    // Check if prescription exists for this appointment
+    let eprescription = await eprescriptionsModel.findOne({ appointmentId });
+console.log("first3",eprescription)
+
+
+    let prescriptionId;
+    if (!eprescription) {
+console.log("first4")
+
+      // Generate unique prescriptionId for new prescription
+      const prescriptionCounter = await Counter.findByIdAndUpdate(
+        { _id: PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.EPRESCRIPTION_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      prescriptionId = PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.SEQUENCE.concat(
+        prescriptionCounter.seq
+      );
+    } else {
+      prescriptionId = eprescription.prescriptionId;
+    }
+console.log("first5")
+
+    // Fetch existing tests and medications by appointmentId, patientId, and doctorId
+    const existingTests = await patientTestModel.find({
+      patientId: userId,
+      doctorId,
+      isDeleted: false,
+      status: { $ne: 'cancelled' },
+    });
+console.log("first6,", existingTests)
+
+    const existingMedications = await medicineModel.find({
+      patientId: userId,
+      doctorId,
+      isDeleted: false,
+      status: { $ne: 'cancelled' },
+    });
+console.log("first7",existingMedications)
+
+    // Save or update medicines
+    let newMedications = [];
+    if (diagnosis?.medications && diagnosis.medications.length > 0) {
+      for (const medicine of diagnosis.medications) {
+        const {
+          medInventoryId,
+          medName,
+          quantity,
+          medicineType,
+          dosage,
+          duration,
+          timings,
+          frequency,
+        } = medicine;
+
+        console.log("medicine", medicine)
+        // Check for duplicate medication
+        const isDuplicate = existingMedications.some(
+          (existing) =>
+            existing.medName === medName 
+          // &&
+          //   existing.dosage === dosage &&
+          //   existing.duration === duration &&
+          //   existing.frequency === frequency &&
+            // existing.timings === (Array.isArray(timings) ? timings.join(", ") : timings)
+        );
+
+        if (isDuplicate) {
+          console.log(`Skipping duplicate medication: ${medName}`);
+          continue;
+        }
+console.log("medInventoryId===",medInventoryId)
+console.log("mongoose.Types.ObjectId(medInventoryId)===", new mongoose.Types.ObjectId(medInventoryId))
+        let finalMedInventoryId2 = medInventoryId ? new mongoose.Types.ObjectId(medInventoryId) : null;
+          console.log("finalMedInventoryId2===",finalMedInventoryId2)
+
+       let finalMedInventoryId = medInventoryId &&  mongoose.Types.ObjectId.isValid(medInventoryId)
+          ? new mongoose.Types.ObjectId(medInventoryId)
+          : null;
+          console.log("finalMedInventoryId===",finalMedInventoryId)
+
+        let inventory = await medInventoryModel.findOne({ medName, doctorId });
+        if (!inventory && medInventoryId) {
+          inventory = await medInventoryModel.findById(medInventoryId);
+        }
+
+        const medCounter = await Counter.findByIdAndUpdate(
+          { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
+          { $inc: { seq: 1 } },
+          { new: true, upsert: true }
+        );
+        const pharmacyMedID = PREFIX_SEQUENCE.MEDICINES_SEQUENCE.SEQUENCE.concat(medCounter.seq);
+
+        const newMedicine = await new medicineModel({
+          medInventoryId: finalMedInventoryId || (inventory ? inventory._id : null),
+          medName,
+          quantity,
+          medicineType,
+          dosage,
+          duration,
+          timings: Array.isArray(timings) ? timings.join(", ") : timings,
+          frequency,
+          pharmacyMedID,
+          patientId: userId,
+          doctorId,
+          prescriptionId,
+          createdBy: req.headers.userid,
+          updatedBy: req.headers.userid,
+        }).save();
+
+        newMedications.push({
+          medInventoryId: newMedicine.medInventoryId,
+          medName: newMedicine.medName,
+          quantity: newMedicine.quantity,
+          medicineType: newMedicine.medicineType,
+          dosage: newMedicine.dosage,
+          duration: newMedicine.duration,
+          timings: newMedicine.timings.split(", "), // Convert back to array for consistency
+          frequency: newMedicine.frequency,
+        });
+      }
+    }
+
+    // Save or update tests
+    let newTests = [];
+    if (diagnosis?.selectedTests && diagnosis.selectedTests.length > 0) {
+      for (const test of diagnosis.selectedTests) {
+        const { testInventoryId, testName } = test;
+
+        // Check for duplicate test
+        const isDuplicate = existingTests.some(
+          (existing) => existing.testName === testName
+        );
+
+        if (isDuplicate) {
+          console.log(`Skipping duplicate test: ${testName}`);
+          continue;
+        }
+
+        const testCounter = await Counter.findByIdAndUpdate(
+          { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
+          { $inc: { seq: 1 } },
+          { new: true, upsert: true }
+        );
+        const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(testCounter.seq);
+
+        const newTest = await new patientTestModel({
+          testInventoryId: testInventoryId ? testInventoryId : null,
+          testName,
+          patientId: userId,
+          prescriptionId,
+          labTestID,
+          doctorId,
+          createdBy: req.user?._id,
+          updatedBy: req.user?._id,
+        }).save();
+
+        newTests.push({
+          testInventoryId: newTest.testInventoryId,
+          testName: newTest.testName,
+        });
+      }
+    }
+
+    // Merge existing and new tests/medications for the prescription document
+    const existingPrescriptionTests = eprescription?.diagnosis?.selectedTests || [];
+    const existingPrescriptionMedications = eprescription?.diagnosis?.medications || [];
+
+    // Create or update e-prescription document
+    if (eprescription) {
+      // Update existing prescription
+      eprescription = await eprescriptionsModel.findOneAndUpdate(
+        { appointmentId },
+        {
+          userId,
+          doctorId,
+          addressId,
+          patientInfo: {
+            patientName: patientInfo?.patientName,
+            age: patientInfo?.age,
+            gender: patientInfo?.gender,
+            mobileNumber: patientInfo?.mobileNumber,
+            chiefComplaint: patientInfo?.chiefComplaint,
+            pastMedicalHistory: patientInfo?.pastMedicalHistory || null,
+            familyMedicalHistory: patientInfo?.familyMedicalHistory || null,
+            physicalExamination: patientInfo?.physicalExamination || null,
+          },
+          vitals: {
+            bp: vitals?.bp || null,
+            pulseRate: vitals?.pulseRate || null,
+            respiratoryRate: vitals?.respiratoryRate || null,
+            temperature: vitals?.temperature || null,
+            spo2: vitals?.spo2 || null,
+            height: vitals?.height || null,
+            weight: vitals?.weight || null,
+            bmi: vitals?.bmi || null,
+            investigationFindings: vitals?.investigationFindings || null,
+          },
+          diagnosis: diagnosis
+            ? {
+                diagnosisNote: diagnosis.diagnosisNote || null,
+                testsNote: diagnosis.testsNote || null,
+                PrescribeMedNotes: diagnosis.PrescribeMedNotes || null,
+                selectedTests: [
+                  ...existingPrescriptionTests,
+                  ...newTests,
+                ],
+                medications: [
+                  ...existingPrescriptionMedications,
+                  ...newMedications,
+                ],
+              }
+            : null,
+          advice: {
+            advice: advice?.advice || null,
+            followUpDate: advice?.followUpDate || null,
+          },
+          updatedBy: req.headers.userid,
+          updatedAt: new Date(),
+        },
+        { new: true }
+      );
+    } else {
+      // Create new prescription
+      eprescription = new eprescriptionsModel({
+        prescriptionId,
+        appointmentId,
+        userId,
+        doctorId,
+        addressId,
+        patientInfo: {
+          patientName: patientInfo?.patientName,
+          age: patientInfo?.age,
+          gender: patientInfo?.gender,
+          mobileNumber: patientInfo?.mobileNumber,
+          chiefComplaint: patientInfo?.chiefComplaint,
+          pastMedicalHistory: patientInfo?.pastMedicalHistory || null,
+          familyMedicalHistory: patientInfo?.familyMedicalHistory || null,
+          physicalExamination: patientInfo?.physicalExamination || null,
+        },
+        vitals: {
+          bp: vitals?.bp || null,
+          pulseRate: vitals?.pulseRate || null,
+          respiratoryRate: vitals?.respiratoryRate || null,
+          temperature: vitals?.temperature || null,
+          spo2: vitals?.spo2 || null,
+          height: vitals?.height || null,
+          weight: vitals?.weight || null,
+          bmi: vitals?.bmi || null,
+          investigationFindings: vitals?.investigationFindings || null,
+        },
+        diagnosis: diagnosis
+          ? {
+              diagnosisNote: diagnosis.diagnosisNote || null,
+              testsNote: diagnosis.testsNote || null,
+              PrescribeMedNotes: diagnosis.PrescribeMedNotes || null,
+              selectedTests: diagnosis.selectedTests || [],
+              medications: diagnosis.medications || [],
+            }
+          : null,
+        advice: {
+          advice: advice?.advice || null,
+          followUpDate: advice?.followUpDate || null,
+        },
+        createdBy: req.headers.userid,
+        updatedBy: req.headers.userid,
+      });
+      await eprescription.save();
+    }
+
+    res.status(201).json({
+      success: true,
+      prescriptionId: eprescription.prescriptionId,
+      message: eprescription.isNew
+        ? "Prescription added successfully"
+        : "Prescription updated successfully",
+      data: {
+        skippedTests: diagnosis?.selectedTests
+          ? diagnosis.selectedTests.filter((test) =>
+              existingTests.some((existing) => existing.testName === test.testName)
+            )
+          : [],
+        skippedMedications: diagnosis?.medications
+          ? diagnosis.medications.filter((med) =>
+              existingMedications.some(
+                (existing) =>
+                  existing.medName === med.medName &&
+                  existing.dosage === med.dosage &&
+                  existing.duration === med.duration &&
+                  existing.frequency === med.frequency &&
+                  existing.timings === (Array.isArray(med.timings) ? med.timings.join(", ") : med.timings)
+              )
+            )
+          : [],
+      },
+    });
+  } catch (error) {
+    console.log("error", error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Duplicate prescription, test, or medication entry detected",
+      });
+    }
+
+    res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error",
+    });
+  }
+};
+
+exports.getPrescriptionsByAppointmentIds = async (req, res) => {
+  try {
+    const { appointmentIds } = req.body;
+
+    // Validate input
+    if (!appointmentIds || !Array.isArray(appointmentIds) || appointmentIds.length === 0) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Valid appointmentIds array is required"
+      });
+    }
+
+    // Query prescriptions
+    const prescriptions = await eprescriptionsModel.find({
+      appointmentId: { $in: appointmentIds }
+    }).lean();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Prescriptions retrieved successfully",
+      data: prescriptions
+    });
+
+  } catch (error) {
+    console.error("Error in getPrescriptionsByAppointmentIds:", error);
+    return res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error"
+    });
+  }
+};
+
 exports.getEPrescriptionByPatientId = async (req, res) => {
   try {
     const { patientId } = req.params;
@@ -720,6 +1115,41 @@ exports.getEPrescriptionByPatientId = async (req, res) => {
     }
 
     const prescriptions = await eprescriptionsModel.find({ userId: patientId });
+
+    if (!prescriptions || prescriptions.length === 0) {
+      return res.status(200).json({
+        status: "fail",
+        message: "No prescriptions found for this patient",
+        data: [],
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Prescriptions retrieved successfully",
+      data: prescriptions,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+
+
+exports.getEPrescriptionByAppointmentId = async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+
+    if (!appointmentId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Patient ID is required",
+      });
+    }
+
+    const prescriptions = await eprescriptionsModel.find({ appointmentId: appointmentId });
 
     if (!prescriptions || prescriptions.length === 0) {
       return res.status(200).json({
