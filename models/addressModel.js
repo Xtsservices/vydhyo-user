@@ -22,7 +22,7 @@ const addressSchema = new mongoose.Schema({
   clinicName: {
     type: String,
     required: true,
-    unique: false,
+    // unique: false,
   },
   address: {
     type: String,
