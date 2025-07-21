@@ -299,7 +299,7 @@ exports.addattach = async (req, res) => {
 
 
     // Clean up the temporary file
-    await unlink(req.file.path);
+    // await unlink(req.file.path);
     fileDeleted = true; // Mark file as deleted
 
     // Update prescription in database
@@ -435,18 +435,24 @@ exports.uploadImageToAirtelAPI = async (filePath) => {
 
 
 exports.sendWhatsQrAppMessage = async (order, whatsappuploadedid) => {
-  const userId = order.userId; // Extract userId from the order object
-  const user = await User.findOne({ where: { id: userId } }); // Fetch user details from the User table
-  const phoneNumber = user?.mobile; // Get the phone number from the user details
+  console.log("order==",order)
+  const userId = order.patientId; // Extract userId from the order object
+  console.log("userId====",userId)
+  const user = await User.findOne({ userId: userId });
 
+  const phoneNumber =   user?.mobile; // Get the phone number from the user details
+console.log("user====",user)
   const name =
-    user?.firstName && user?.lastName
-      ? `${user.firstName} ${user.lastName}`
+    user?.firstname && user?.lastname
+      ? `${user.firstname} ${user.lastname}`
       : "User"; // Default to 'User' if name doesn't exist
 
-  let OrderNo = "NV".concat(order.id.toString());
+  // let OrderNo = "NV".concat(order.id.toString());
   let toNumber = "91".concat(phoneNumber);
 
+
+ const doctorfirstname = "Dr.";
+    const doctorlastname = "Vaidya";
 
     sendImageWithAttachment(
       toNumber,
@@ -493,7 +499,7 @@ exports.sendWhatsQrAppMessage = async (order, whatsappuploadedid) => {
 };
 
 
-exports.sendImageWithAttachment = async (
+const sendImageWithAttachment = async (
   to,
   templateId,
   variables,
@@ -523,14 +529,15 @@ exports.sendImageWithAttachment = async (
     },
     ...(whatsappuploadedid && {
       mediaAttachment: {
-        type: "IMAGE",
+        type: "DOCUMENT",
         id: whatsappuploadedid
       }
     })
   };
-
+  console.log("📤 Final Payload:", JSON.stringify(payloadData, null, 2));
   try {
     const response = await axios.post(url, payloadData, { headers });
+    console.log("✅ Message sent successfully:", response.data);
   } catch (error) {
     console.error('❌ Error sending message with attachment:', error.response?.data || error.message);
     throw error;
@@ -830,15 +837,11 @@ console.log("first7",existingMedications)
           console.log(`Skipping duplicate medication: ${medName}`);
           continue;
         }
-console.log("medInventoryId===",medInventoryId)
-console.log("mongoose.Types.ObjectId(medInventoryId)===", new mongoose.Types.ObjectId(medInventoryId))
-        let finalMedInventoryId2 = medInventoryId ? new mongoose.Types.ObjectId(medInventoryId) : null;
-          console.log("finalMedInventoryId2===",finalMedInventoryId2)
+ let finalMedInventoryId2 = medInventoryId ? new mongoose.Types.ObjectId(medInventoryId) : null;
 
        let finalMedInventoryId = medInventoryId &&  mongoose.Types.ObjectId.isValid(medInventoryId)
           ? new mongoose.Types.ObjectId(medInventoryId)
           : null;
-          console.log("finalMedInventoryId===",finalMedInventoryId)
 
         let inventory = await medInventoryModel.findOne({ medName, doctorId });
         if (!inventory && medInventoryId) {
