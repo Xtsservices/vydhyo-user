@@ -377,6 +377,10 @@ exports.fetchMyDoctorPatients = async (req, res) => {
     const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds, ...appointmentPatientIds])];
 
     if (!patientIds.length) {
+      return res.status(200).json({
+      success: true,
+      data: [],
+    });
       return res.status(404).json({ message: "No patients found for this doctor" });
     }
 
@@ -388,6 +392,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
     }).select("firstname lastname email userId DOB gender bloodgroup mobile");
 
     if (!patients.length) {
+      
       return res.status(404).json({ message: "No patients found for this doctor" });
     }
 
