@@ -86,7 +86,15 @@ const addressSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  headerImage: {
+    type: String,
+    default: null, // Store the file path or URL of the header image
+  },
+   digitalSignature: {
+    type: String,
+    default: null, // Store the base64 string of the digital signature (optional)
+  },
 });
 
 

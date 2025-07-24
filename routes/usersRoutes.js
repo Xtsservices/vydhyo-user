@@ -16,7 +16,7 @@ const {
     ePrescription,
    
 } = require('../controllers/usersController');
-const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress } = require('../controllers/addressController');
+const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
 // Configure multer for file handling
@@ -40,6 +40,7 @@ router.get('/getAddress', getAddress);
 router.get('/getClinicAddress', getClinicAddress);
 router.post('/addAddress', addAddress);
 router.put('/updateAddress', updateAddress);
+router.post('/uploadClinicHeader',  uploadClinicHeader);
 
 // Routes for insurance management
 router.post('/addInsurance', addInsurance);

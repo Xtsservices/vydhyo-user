@@ -8,6 +8,36 @@ const axios = require('axios');
 const deleteAddressValidationSchema = require('../schemas/deleteClinicSchema');
 dotenv.config();
 
+const multer = require('multer');
+
+// Multer configuration for memory storage
+const storage = multer.memoryStorage();
+const upload2 = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png/;
+    const mimetype = filetypes.test(file.mimetype);
+    if (mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Only JPEG and PNG images are allowed'));
+  },
+}).single('file');
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png/;
+    const mimetype = filetypes.test(file.mimetype);
+    if (mimetype) {
+      return cb(null, true);
+    }
+    cb(new Error('Only JPEG and PNG images are allowed'));
+  },
+});
+
 
 exports.addAddress = async (req, res) => {
   try {
@@ -122,6 +152,85 @@ exports.updateAddress = async (req, res) => {
     });
   }
 }
+
+exports.uploadClinicHeader = async (req, res) => {
+    upload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'signature', maxCount: 1 },
+  ])(req, res, async (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      return res.status(400).json({
+        status: 'error',
+        message: err.message || 'File upload failed',
+      });
+    }
+
+    try {
+      const { addressId } = req.body;
+      const doctorId = req.headers?.userid; // Assuming userId is set by authentication middleware
+
+      if (!addressId || !doctorId) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'addressId and doctorId are required',
+        });
+      }
+
+      // Verify the clinic exists and belongs to the doctor
+      const clinic = await UserAddress.findOne({
+        addressId,
+        userId: doctorId,
+      });
+
+      if (!clinic) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Clinic not found or not authorized',
+        });
+      }
+
+      // Check if header image was uploaded
+      if (!req.files || !req.files.file || !req.files.file[0]) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Header image is required',
+        });
+      }
+
+    // Convert header image to base64
+      const headerFile = req.files.file[0];
+      const base64Image = `data:${headerFile.mimetype};base64,${headerFile.buffer.toString('base64')}`;
+
+      // Convert digital signature to base64 (if provided)
+      let base64Signature = clinic.digitalSignature; // Preserve existing signature if not updated
+      if (req.files.signature && req.files.signature[0]) {
+        const signatureFile = req.files.signature[0];
+        base64Signature = `data:${signatureFile.mimetype};base64,${signatureFile.buffer.toString('base64')}`;
+      }
+
+      // Update the clinic with the base64 image
+      clinic.headerImage = base64Image;
+      clinic.digitalSignature = base64Signature;
+      clinic.updatedAt = Date.now();
+      await clinic.save();
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Header uploaded successfully',
+        data: {
+          headerImage: 'stored', // Indicate success without returning the full base64 string
+        },
+      });
+    } catch (error) {
+      console.error('Upload header error:', error);
+      return res.status(500).json({
+        status: 'error',
+        message: error.message || 'Internal server error',
+      });
+    }
+  });
+};
 
 exports.googleAddressSuggession = async (req, res) => {
   const { input } = req.query;
