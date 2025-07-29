@@ -344,6 +344,11 @@ exports.fetchMyDoctorPatients = async (req, res) => {
       return res.status(400).json({ error: "Invalid Doctor ID" });
     }
 
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     // Collect patientIds from test and medicine data
     const testPatientIds = await PatientTest.find({
       doctorId,
@@ -376,22 +381,44 @@ exports.fetchMyDoctorPatients = async (req, res) => {
     // Merge and deduplicate all patientIds
     const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds, ...appointmentPatientIds])];
 
+    console.log("Total unique patientIds:", patientIds.length, patientIds);
+
     if (!patientIds.length) {
       return res.status(200).json({
       success: true,
       data: [],
+       pagination: {
+          page,
+          limit,
+          totalPages: 0,
+          totalPatients: 0
+        }
     });
       return res.status(404).json({ message: "No patients found for this doctor" });
     }
+
+    
+
 
     // Fetch patient details
     const patients = await User.find({
       role: "patient",
       userId: { $in: patientIds },
       isDeleted: false,
-    }).select("firstname lastname email userId DOB gender bloodgroup mobile");
+    }).select("firstname lastname email userId DOB gender bloodgroup mobile"); 
 
+       console.log("Patients fetched from database:", patients.length)
     if (!patients.length) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: {
+          page,
+          limit,
+          totalPages: 0,
+          totalPatients:0
+        }
+      });
       
       return res.status(404).json({ message: "No patients found for this doctor" });
     }
@@ -525,10 +552,19 @@ exports.fetchMyDoctorPatients = async (req, res) => {
 
     // Filter out patients with no data
     const filteredPatientDetails = patientDetails.filter(Boolean);
+    const paginatedPatients = filteredPatientDetails.slice(skip, skip + limit);
+    console.log("Patients after filtering:", filteredPatientDetails.length);
+
 
     return res.status(200).json({
       success: true,
-      data: filteredPatientDetails,
+      data: paginatedPatients,
+       pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(filteredPatientDetails.length / limit),
+        totalPatients: filteredPatientDetails.length
+      }
     });
   } catch (error) {
     console.error("Error fetching doctor patients:", error);
