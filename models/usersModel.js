@@ -130,6 +130,10 @@ const userSchema = new mongoose.Schema({
   access: {
     type: [String],
     default: []
+  },
+   familyProvider: {
+    type: String,
+    default: null // Set to userId of the primary family member or null if self
   }
 });
 

@@ -753,7 +753,6 @@ exports.addPrescription = async (req, res) => {
         errors: errorMessages,
       });
     }
-console.log("first")
     const {
       userId,
       doctorId,
@@ -764,16 +763,13 @@ console.log("first")
       diagnosis,
       advice,
     } = value;
-console.log("first2")
 
     // Check if prescription exists for this appointment
     let eprescription = await eprescriptionsModel.findOne({ appointmentId });
-console.log("first3",eprescription)
 
 
     let prescriptionId;
     if (!eprescription) {
-console.log("first4")
 
       // Generate unique prescriptionId for new prescription
       const prescriptionCounter = await Counter.findByIdAndUpdate(
@@ -787,7 +783,6 @@ console.log("first4")
     } else {
       prescriptionId = eprescription.prescriptionId;
     }
-console.log("first5")
 
     // Fetch existing tests and medications by appointmentId, patientId, and doctorId
     const existingTests = await patientTestModel.find({
@@ -796,7 +791,6 @@ console.log("first5")
       isDeleted: false,
       status: { $ne: 'cancelled' },
     });
-console.log("first6,", existingTests)
 
     const existingMedications = await medicineModel.find({
       patientId: userId,
@@ -804,7 +798,6 @@ console.log("first6,", existingTests)
       isDeleted: false,
       status: { $ne: 'cancelled' },
     });
-console.log("first7",existingMedications)
 
     // Save or update medicines
     let newMedications = [];
@@ -821,7 +814,6 @@ console.log("first7",existingMedications)
           frequency,
         } = medicine;
 
-        console.log("medicine", medicine)
         // Check for duplicate medication
         const isDuplicate = existingMedications.some(
           (existing) =>
@@ -1221,12 +1213,26 @@ exports.getAllMedicinesByDoctorID = async (req, res) => {
         message: "Doctor ID is required",
       });
     }
+
+     // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const inventory = await medInventoryModel
       .find({ doctorId })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const totalCount = await medInventoryModel.countDocuments({ doctorId });
+   
     res.status(200).json({
       success: true,
       data: inventory,
+        currentPage: page,
+      totalPages: Math.ceil(totalCount / limit),
+      totalRecords: totalCount,
     });
   } catch (error) {
     res.status(500).json({
@@ -1236,15 +1242,26 @@ exports.getAllMedicinesByDoctorID = async (req, res) => {
   }
 };
 
-exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
+exports.getAllPharmacyPatientsByDoctorID2 = async (req, res) => {
   try {
     const doctorId = req.query.doctorId || req.headers.userid;
+     const { searchText, status, page = 1, limit = 5 } = req.query;
 
     // Validate doctorId
     if (!doctorId) {
       return res.status(400).json({
         status: "fail",
         message: "Doctor ID is required",
+      });
+    }
+
+    // Validate pagination parameters
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Invalid page or limit parameters",
       });
     }
 
@@ -1329,6 +1346,198 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
     res.status(500).json({
       status: "fail",
       message: error.message,
+    });
+  }
+};
+
+exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
+  try {
+    const doctorId = req.query.doctorId || req.headers.userid;
+    const { searchText, status, page = 1, limit = 5 } = req.query;
+
+    // Validate doctorId
+    if (!doctorId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Doctor ID is required",
+      });
+    }
+
+    // Validate pagination parameters
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    if (isNaN(pageNum) || pageNum < 1 || isNaN(limitNum) || limitNum < 1) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Invalid page or limit parameters",
+      });
+    }
+
+    const skip = (pageNum - 1) * limitNum;
+    console.log('Request params:', { doctorId, searchText, status, pageNum, limitNum, skip }); // Debug log
+
+    // Build match conditions
+    const matchConditions = { doctorId, isDeleted: false };
+    if (searchText) {
+      matchConditions.$or = [
+        { patientId: { $regex: searchText, $options: 'i' } },
+        // Will handle patientName search via userData after $lookup
+      ];
+    }
+    console.log('Initial match conditions:', matchConditions); // Debug log
+
+    // Build aggregation pipeline
+    const pipeline = [
+      {
+        $match: matchConditions,
+      },
+      {
+        $lookup: {
+          from: "medinventories",
+          localField: "medInventoryId",
+          foreignField: "_id",
+          as: "inventoryData",
+        },
+      },
+      {
+        $unwind: {
+          path: "$inventoryData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "patientId",
+          foreignField: "userId",
+          as: "userData",
+        },
+      },
+      {
+        $unwind: {
+          path: "$userData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      // Add searchText filter for patientName after userData lookup
+      ...(searchText ? [{
+        $match: {
+          $or: [
+            { patientId: { $regex: searchText, $options: 'i' } }, // Already in matchConditions, but included for clarity
+            {
+              $expr: {
+                $regexMatch: {
+                  input: {
+                    $concat: [
+                      { $ifNull: ["$userData.firstname", ""] },
+                      " ",
+                      { $ifNull: ["$userData.lastname", ""] },
+                    ],
+                  },
+                  regex: searchText,
+                  options: 'i',
+                },
+              },
+            },
+          ],
+        },
+      }] : []),
+      {
+        $group: {
+          _id: "$patientId",
+          patientName: {
+            $first: {
+              $concat: [
+                { $ifNull: ["$userData.firstname", ""] },
+                " ",
+                { $ifNull: ["$userData.lastname", ""] },
+              ],
+            },
+          },
+          doctorId: { $first: "$doctorId" },
+          medicines: {
+            $push: {
+              _id: "$_id",
+              medName: "$medName",
+              price: { $ifNull: ["$inventoryData.price", null] },
+              quantity: "$quantity",
+              status: "$status",
+              createdAt: "$createdAt",
+              pharmacyMedID: "$pharmacyMedID",
+            },
+          },
+        },
+      },
+      // Filter medicines by status
+      {
+        $project: {
+          patientId: "$_id",
+          patientName: 1,
+          doctorId: 1,
+          medicines: {
+            $filter: {
+              input: "$medicines",
+              as: "medicine",
+              cond: {
+                $cond: {
+                  if: { $eq: [status, "pending"] },
+                  then: { $eq: ["$$medicine.status", "pending"] },
+                  else: { $ne: ["$$medicine.status", "pending"] },
+                },
+              },
+            },
+          },
+          _id: 0,
+        },
+      },
+      // Remove patients with no matching medicines
+      {
+        $match: {
+          medicines: { $ne: [] },
+        },
+      },
+      {
+        $sort: { patientId: -1 }, // Sort by patientId descending (latest on top)
+      },
+      {
+        $facet: {
+          paginatedResults: [
+            { $skip: skip },
+            { $limit: limitNum },
+          ],
+          totalCount: [
+            { $count: "count" },
+          ],
+        },
+      },
+    ];
+    console.log('Aggregation pipeline:', JSON.stringify(pipeline, null, 2)); // Debug log
+
+    // Execute aggregation
+    const [result] = await medicineModel.aggregate(pipeline);
+    const patients = result?.paginatedResults || [];
+    const totalPatients = result?.totalCount[0]?.count || 0;
+    const totalPages = Math.ceil(totalPatients / limitNum);
+    console.log('Results:', { patients: patients.length, totalPatients, totalPages }); // Debug log
+
+    res.status(200).json({
+      status: "success",
+      message: "Pharmacy patients retrieved successfully",
+      data: {
+        patients,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalPatients,
+          totalPages,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error in getAllPharmacyPatientsByDoctorID:", error);
+    res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error",
     });
   }
 };

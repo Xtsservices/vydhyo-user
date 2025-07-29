@@ -227,10 +227,27 @@ const getTestsByDoctorId = async (req, res) => {
 
     const doctorId = req.params.doctorId;
 
+     // Pagination inputs with validation
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (page < 1 || limit < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Page and limit must be positive integers",
+      });
+    }
+
+    const skip = (page - 1) * limit;
+
+     // Fetch total count of tests
+    const totalTests = await TestInventory.countDocuments({ doctorId: doctorId.trim() });
+
     // Fetch tests by doctorId
     const tests = await TestInventory.find({ doctorId: doctorId.trim() }).sort({
       createdAt: -1,
-    });
+    }).skip(skip)
+      .limit(limit);
 
     // Map tests to response format
     const formattedTests = tests.map((test) => ({
@@ -244,7 +261,15 @@ const getTestsByDoctorId = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Tests retrieved successfully",
-      data: formattedTests,
+     data: {
+        tests: formattedTests,
+        pagination: {
+          page,
+          limit,
+          totalTests,
+          totalPages: Math.ceil(totalTests / limit),
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching tests:", error);
@@ -258,6 +283,7 @@ const getTestsByDoctorId = async (req, res) => {
 const getAllTestsPatientsByDoctorID = async (req, res) => {
   try {
     const doctorId = req.params.doctorId || req.headers.userid;
+     const { searchValue, status, page = 1, limit = 5 } = req.query;
 
     // Validate doctorId
     if (!doctorId) {
@@ -267,14 +293,32 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       });
     }
 
-    // Aggregate tests by patientId for the given doctorId
-    const patients = await patientTestModel.aggregate([
+     // Validate pagination inputs
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    if (pageNum < 1 || limitNum < 1) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Page and limit must be positive integers",
+      });
+    }
+
+    const skip = (pageNum - 1) * limitNum;
+
+   // Build match conditions
+    const matchConditions = { doctorId };
+    if (searchValue) {
+      matchConditions.patientId = { $regex: searchValue, $options: "i" }; // Case-insensitive search
+    }
+
+    // Build aggregation pipeline
+    const pipeline = [
       {
-        $match: { doctorId }, // Filter by doctorId
+        $match: matchConditions, // Filter by doctorId and patientId (if searchValue provided)
       },
       {
         $lookup: {
-          from: "testinventories", // Collection name for TestInventory model
+          from: "testinventories",
           let: {
             testInventoryId: "$testInventoryId",
             testName: "$testName",
@@ -285,7 +329,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
               $match: {
                 $expr: {
                   $or: [
-                    { $eq: ["$_id", "$$testInventoryId"] }, // Match by testInventoryId
+                    { $eq: ["$_id", "$$testInventoryId"] },
                     {
                       $and: [
                         { $eq: ["$testName", "$$testName"] },
@@ -303,12 +347,12 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       {
         $unwind: {
           path: "$testData",
-          preserveNullAndEmptyArrays: true, // Keep tests even if no matching test price
+          preserveNullAndEmptyArrays: true,
         },
       },
       {
         $lookup: {
-          from: "users", // Collection name for Users model
+          from: "users",
           localField: "patientId",
           foreignField: "userId",
           as: "userData",
@@ -317,7 +361,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       {
         $unwind: {
           path: "$userData",
-          preserveNullAndEmptyArrays: true, // Keep tests even if no matching user
+          preserveNullAndEmptyArrays: true,
         },
       },
       {
@@ -332,36 +376,81 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
               ],
             },
           },
-          doctorId: { $first: "$doctorId" }, // Include doctorId
+          doctorId: { $first: "$doctorId" },
           tests: {
             $push: {
               _id: "$_id",
               testName: "$testName",
               price: { $ifNull: ["$testData.testPrice", null] },
-              status: "$status", // Include status
+              status: "$status",
               createdAt: "$createdAt",
               labTestID: "$labTestID",
             },
           },
         },
       },
+      // Filter tests by status
       {
         $project: {
           patientId: "$_id",
           patientName: 1,
           doctorId: 1,
-          tests: 1,
+          tests: {
+            $filter: {
+              input: "$tests",
+              as: "test",
+              cond: {
+                $cond: {
+                  if: { $eq: [status, "pending"] },
+                  then: { $eq: ["$$test.status", "pending"] },
+                  else: { $ne: ["$$test.status", "pending"] },
+                },
+              },
+            },
+          },
           _id: 0,
         },
       },
+      // Remove patients with no matching tests
       {
-        $sort: { patientId: 1 },
+        $match: {
+          tests: { $ne: [] },
+        },
       },
-    ]);
+      {
+        $sort: { patientId: -1 }, // Sort by patientId descending (latest on top)
+      },
+      {
+        $facet: {
+          paginatedResults: [
+            { $skip: skip },
+            { $limit: limitNum },
+          ],
+          totalCount: [
+            { $count: "count" },
+          ],
+        },
+      },
+    ];
+
+
+    // Aggregate tests by patientId for the given doctorId
+     const [result] = await patientTestModel.aggregate(pipeline);
+    const patients = result.paginatedResults || [];
+    const totalPatients = result.totalCount[0]?.count || 0;
+    const totalPages = Math.ceil(totalPatients / limitNum);
 
     res.status(200).json({
       status: "success",
-      data: patients || [],
+      data: {
+        patients,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalPatients,
+          totalPages,
+        },
+      },
     });
   } catch (error) {
     res.status(500).json({

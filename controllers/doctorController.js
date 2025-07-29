@@ -1,6 +1,6 @@
 const { receptionistSchema, editReceptionistSchema } = require("../schemas/doctor_receptionistSchema");
 const schedule = require("../models/scheduleModel");
-const { patientSchema } = require("../schemas/ReceptionPatientSchema");
+const { patientSchema, patientUpdateSchema, patientSchemaFromPatientApp } = require("../schemas/ReceptionPatientSchema");
 const Users = require("../models/usersModel");
 const doctorReceptionist = require("../models/doctor_receptionistModel");
 const { convertImageToBase64 } = require('../utils/imageService');
@@ -580,6 +580,153 @@ exports.editReceptionist = async (req, res) => {
     return res.status(500).json({
       status: "fail",
       message: error.message || "Internal server error"
+    });
+  }
+};
+
+
+exports.createPatientFromPatientApp = async (req, res) => {
+  try {
+    const { error } = patientSchemaFromPatientApp.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        status: "fail",
+        message: error.details[0].message,
+      });
+    }
+
+    req.body.status = "active";
+    req.body.role = "patient";
+    req.body.doctorId = req.body?.doctorId;
+    req.body.createdBy = req.headers?.userid;
+    req.body.assignedBy = req.headers?.userid;
+    req.body.updatedBy = req.headers?.userid;
+
+    const counter = await Sequence.findByIdAndUpdate({ _id: sequenceConstant.USERSEQUENCE.USER_MODEL }, { $inc: { seq: 1 } }, { new: true, upsert: true });
+    req.body.userId = sequenceConstant.USERSEQUENCE.SEQUENCE.concat(counter.seq);
+
+    const user = await Users.create(req.body);
+    if (user) {
+      return res.status(200).json({
+        status: "success",
+        message: "patient created successfully",
+        data: user,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+// Update patient
+exports.updatePatientFromPatientApp = async (req, res) => {
+  try {
+    const userId = req.query.userId || req.headers.userid;
+    if (!userId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "User ID is required in query or headers",
+      });
+    }
+
+    const { error } = patientUpdateSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        status: "fail",
+        message: error.details[0].message,
+      });
+    }
+
+    const updateData = {
+      ...req.body,
+      updatedBy: req.headers?.userid,
+      updatedAt: new Date()
+    };
+
+    const user = await Users.findOneAndUpdate(
+      { userId, role: "patient", isDeleted: false },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('userId firstname lastname email mobile gender DOB age relationship familyProvider ');
+
+    if (!user) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Patient not found or not authorized",
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Patient updated successfully",
+      data: user,
+    });
+  } catch (error) {
+    console.error('Error updating patient:', error);
+    return res.status(500).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+};
+
+// Get all family members
+exports.getAllFamilyMembers = async (req, res) => {
+  try {
+    const userId = req.query.userId || req.headers.userid  ;
+    if (!userId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "User ID is required in headers or query"
+      });
+    }
+
+    const familyMembers = await Users.aggregate([
+      {
+        $match: {
+          $or: [
+            { familyProvider: userId },
+            { userId: userId }
+          ],
+          isDeleted: false
+        }
+      },
+      {
+        $project: {
+          userId: 1,
+          firstname: 1,
+          lastname: 1,
+          email: 1,
+          mobile: 1,
+          relationship: 1,
+          familyRole: 1,
+          gender: 1,
+          DOB: 1,
+          age: 1,
+          bloodgroup: 1
+        }
+      }
+    ]);
+
+    if (!familyMembers || familyMembers.length === 0) {
+      return res.status(404).json({
+        status: "fail",
+        message: "No family members found for this user"
+      });
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Family members retrieved successfully",
+      data: familyMembers
+    });
+  } catch (error) {
+    console.error('Error fetching family members:', error);
+    return res.status(500).json({
+      status: "fail",
+      message: error.message
     });
   }
 };

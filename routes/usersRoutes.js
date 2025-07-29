@@ -14,6 +14,11 @@ const {
     userSubmit,
     getUsersDetailsByIds,
     ePrescription,
+    getAllSpecializations,
+    getAllDoctorsBySpecializations,
+    getDoctorsCount,
+    getUserClinicsData,
+    getKycByUserId,
    
 } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader } = require('../controllers/addressController');
@@ -24,7 +29,10 @@ const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporaril
 
 // Routes for user management
 router.get('/AllUsers', getAllUsers);
+router.get('/getDoctorsCount', getDoctorsCount);
+router.get('/getUserClinicsData', getUserClinicsData);
 router.get('/getUser', getUserById);
+router.get('/getKycByUserId', getKycByUserId);
 router.put('/updateUser', upload.single('profilePic'), updateUser);
 router.get('/deleteMyAccount', deleteMyAccount);
 router.post('/updateSpecialization', upload.fields([
@@ -56,11 +64,17 @@ router.post('/addKYCDetails', upload.fields([
 router.get('/getKYCDetails', getKYCDetails);
 
 
+
 // Route to send onboarding submission email
 router.post('/sendOnboardingEmail', userSubmit);
 router.post('/getUsersDetailsByIds', getUsersDetailsByIds);
 router.post("/deleteClinicAddress", deleteClinicAddress);
 router.post("/ePrescription", ePrescription);
+
+
+//for patient app
+router.get('/getAllSpecializations', getAllSpecializations);
+router.get('/getAllDoctorsBySpecializations/:specialization', getAllDoctorsBySpecializations);
 
 
 

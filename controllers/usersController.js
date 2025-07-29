@@ -87,12 +87,35 @@ exports.getAllUsers = async (req, res) => {
     if (!req.query?.type) {
       return res.status(400).json({ error: "'type' query parameter is required." });
     }
-    if (req.query.status) {
-      obj.status = req.query?.status
-    }
+   
+      obj.status = req.query?.status || 'inActive';
+   
     obj.role = req.query?.type
+
+    // Build search query for name and mobile
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, 'i'); // Case-insensitive search
+      obj.$or = [
+        { firstname: searchRegex },
+        { lastname: searchRegex },
+        { mobile: searchRegex },
+      ];
+    }
+
+     // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    
+
     console.log("obj",obj)
-    const users = await Users.find(obj, { refreshToken: 0 });
+    const users = await Users.find(obj, { refreshToken: 0 }) .sort({ createdAt: -1 })
+     .skip(skip)
+      .limit(limit);
+
+      // Get total count for pagination metadata
+    const total = await Users.countDocuments(obj);
+
     if (users.length < 1) {
       return res.status(404).json({
         status: 'fail',
@@ -103,6 +126,14 @@ exports.getAllUsers = async (req, res) => {
     return res.status(200).json({
       status: 'success',
       data: users,
+       pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPrevPage: page > 1
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -111,6 +142,31 @@ exports.getAllUsers = async (req, res) => {
     });
   }
 }
+
+exports.getDoctorsCount = async (req, res) => {
+  try {
+    const approvedCount = await Users.countDocuments({ role: 'doctor', status: 'approved' });
+    const rejectedCount = await Users.countDocuments({ role: 'doctor', status: 'rejected' });
+    const inactiveCount = await Users.countDocuments({ role: 'doctor', status: 'inActive' });
+    const totalCount = await Users.countDocuments({ role: 'doctor' });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        total: totalCount,
+        approved: approvedCount,
+        rejected: rejectedCount,
+        inActive: inactiveCount
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
 
 exports.getUserById = async (req, res) => {
   const userId = req.query.userId || req.headers.userid;
@@ -141,6 +197,127 @@ exports.getUserById = async (req, res) => {
     });
   }
 }
+
+
+exports.getUserClinicsData = async (req, res) => {
+  const userId = req.query.userId || req.headers.userid;
+
+  // Validate userId
+  if (!userId) {
+    return res.status(400).json({
+      status: 'fail',
+      message: 'User ID is required in query or headers',
+    });
+  }
+
+  try {
+    // Aggregation pipeline
+    const pipeline = [
+      { $match: { userId: userId } },
+      {
+        $lookup: {
+          from: 'addresses',
+          localField: 'userId',
+          foreignField: 'userId',
+          as: 'addresses',
+        },
+      },
+      {
+        $project: {
+          userId: 1,
+          name: {
+            $concat: [
+              { $ifNull: ['$firstname', ''] },
+              ' ',
+              { $ifNull: ['$lastname', ''] },
+            ],
+          },
+          addresses: 1,
+          specialization: 1, // Include if exists in Users; will be null if not present
+          _id: 0,
+         
+        },
+      },
+    ];
+
+    const users = await Users.aggregate(pipeline);
+
+    if (!users || users.length === 0) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found',
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'User data retrieved successfully',
+      data: {
+        users,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'An error occurred while fetching user data',
+    });
+  }
+};
+
+exports.getKycByUserId = async (req, res) => {
+  const userId = req.query.userId || req.headers.userid;
+  if (!userId) {
+    return res.status(400).json({
+      status: 'fail',
+      message: 'User ID is required in query or headers',
+    });
+  }
+
+  try {
+    const kycData = await Users.aggregate([
+      { $match: { userId: userId } },
+      {
+        $lookup: {
+          from: 'kycdetails',
+          localField: 'userId',
+          foreignField: 'userId',
+          as: 'kycDetails'
+        }
+      },
+      {
+        $unwind: {
+          path: '$kycDetails',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          userId: 1,
+          kycDetails: 1
+        }
+      }
+    ]);
+
+    if (!kycData || kycData.length === 0 || !kycData[0].kycDetails) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'KYC data not found for user',
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: kycData[0].kycDetails
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
 
 exports.updateUser = async (req, res) => {
   try {
@@ -661,4 +838,101 @@ exports.ePrescription = async (req, res) => {
       error: error.message
     });
   }
+};
+
+exports.getAllSpecializations = async (req, res) => {
+   try {
+           // Fetch distinct specialization names
+           const specializations = await Users.distinct('specialization.name', { role: 'doctor',  status: 'approved' });
+
+           // Filter out null/undefined values and trim whitespace
+           const cleanedSpecializations = specializations
+               .filter(name => name && name.trim())
+               .map(name => name.trim());
+
+           return res.status(200).json({
+               success: true,
+               message: 'Specializations retrieved successfully',
+               data: cleanedSpecializations
+           });
+       } catch (error) {
+           console.error('Error fetching specializations:', error);
+           return res.status(500).json({
+               success: false,
+               message: 'Failed to fetch specializations',
+               error: error.message
+           });
+       }
+}
+
+exports.getAllDoctorsBySpecializations = async (req, res) => {
+    try {
+        const specialization = req.params.specialization?.trim();
+        if (!specialization) {
+            return res.status(400).json({
+                success: false,
+                message: 'Specialization parameter is required'
+            });
+        }
+
+        const doctors = await Users.aggregate([
+            {
+                $match: {
+                    role: 'doctor',
+                    status: 'approved',
+                    'specialization.name': { $regex: `^${specialization}\\s*$`, $options: 'i' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'addresses',
+                    localField: 'userId',
+                    foreignField: 'userId',
+                    as: 'addresses'
+                }
+            },
+            {
+                $project: {
+                    userId: 1,
+                    firstname: 1,
+                    lastname: 1,
+                    email: 1,
+                    mobile: 1,
+                    'specialization.name': 1,
+                    'specialization.experience': 1,
+                    'specialization.degree': 1,
+                    consultationModeFee: 1,
+                    addresses: 1
+                }
+            }
+        ]);
+
+        if (doctors.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `No approved doctors found for specialization: ${specialization}`
+            });
+        }
+
+        const cleanedDoctors = doctors.map(doctor => ({
+            ...doctor,
+            specialization: {
+                ...doctor.specialization,
+                name: doctor.specialization.name.trim()
+            }
+        }));
+
+        return res.status(200).json({
+            success: true,
+            message: `Doctors with specialization ${specialization} retrieved successfully`,
+            data: cleanedDoctors
+        });
+    } catch (error) {
+        console.error('Error fetching doctors by specialization:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch doctors by specialization',
+            error: error.message
+        });
+    }
 };

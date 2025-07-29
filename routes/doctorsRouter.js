@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const multer = require('multer');
 
-const { createReceptionist, createPatient, searchAndFetchUser, getStaffByCreator, createSchedule, getSchedulesAndLeaves, createLeave, editReceptionist } = require("../controllers/doctorController");
+const { createReceptionist, createPatient, searchAndFetchUser, getStaffByCreator, createSchedule, getSchedulesAndLeaves, createLeave, editReceptionist, createPatientFromPatientApp, updatePatientFromPatientApp, getAllFamilyMembers } = require("../controllers/doctorController");
 const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporarily
 
 //Routes for approve Doctors
@@ -15,6 +15,12 @@ router.post("/createSchedule", createSchedule);
 router.post("/createLeave", createLeave);
 router.get("/getSchedulesAndLeaves", getSchedulesAndLeaves);
 router.put("/editReceptionist",  editReceptionist);
+
+//patient app route
+router.post("/createPatientFromPatientApp", createPatientFromPatientApp);
+router.put("/updatePatientFromPatientApp", updatePatientFromPatientApp);
+router.get("/getAllFamilyMembers", getAllFamilyMembers);
+
 
 
 module.exports = router;
