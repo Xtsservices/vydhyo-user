@@ -1,20 +1,20 @@
 const userAggregation = (userId, excludeRefreshToken = false) => {
   const pipeline = [
     { $match: { userId: userId } },
-    {
-      $lookup: {
-        from: 'kycdetails',
-        localField: 'userId',
-        foreignField: 'userId',
-        as: 'kycDetails'
-      }
-    },
-    {
-      $unwind: {
-        path: '$kycDetails',
-        preserveNullAndEmptyArrays: true
-      }
-    },
+    // {
+    //   $lookup: {
+    //     from: 'kycdetails',
+    //     localField: 'userId',
+    //     foreignField: 'userId',
+    //     as: 'kycDetails'
+    //   }
+    // },
+    // {
+    //   $unwind: {
+    //     path: '$kycDetails',
+    //     preserveNullAndEmptyArrays: true
+    //   }
+    // },
     {
       $lookup: {
         from: 'addresses',
