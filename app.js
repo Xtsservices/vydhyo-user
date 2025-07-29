@@ -15,7 +15,7 @@ const connectDB = require('./utils/db');
 const logger = require('./utils/logger');
 const { P } = require('pino');
 
-// Middleware
+// Middleware 
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
