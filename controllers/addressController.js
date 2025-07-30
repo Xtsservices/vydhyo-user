@@ -104,15 +104,15 @@ exports.getClinicAddress = async (req, res) => {
   try { 
     const userId = req.query.doctorId || req.headers.userid;
     const userAddress = await UserAddress.find({userId});
-    if (!userAddress || userAddress.length === 0) { 
-      return res.status(404).json({
-        status: 'fail',
-        message: 'No clinic or hospital address found for this user',
-      });
-    }
+    // if (!userAddress || userAddress.length === 0) { 
+    //   return res.status(404).json({
+    //     status: 'fail',
+    //     message: 'No clinic or hospital address found for this user',
+    //   });
+    // }
     return res.status(200).json({
       status: 'success',
-      data: userAddress
+      data: userAddress || []
     });
     
   } catch (error) { 

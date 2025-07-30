@@ -2,7 +2,7 @@ const Joi = require('joi');
 
 const patientSchema = Joi.object({
   firstname: Joi.string().min(2).max(50).required(),
-  lastname: Joi.string().min(1).max(50).required(),
+  lastname: Joi.string().max(50).allow(''),
   gender: Joi.string().required(),
   age: Joi.string(),
   DOB: Joi.string()

@@ -300,16 +300,18 @@ exports.getKycByUserId = async (req, res) => {
       }
     ]);
 
-    if (!kycData || kycData.length === 0 || !kycData[0].kycDetails) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'KYC data not found for user',
-      });
-    }
+    // if (!kycData || kycData.length === 0 || !kycData[0].kycDetails) {
+    //   return res.status(404).json({
+    //     status: 'fail',
+    //     message: 'KYC data not found for user',
+    //   });
+    // }
+
+    
 
     return res.status(200).json({
       status: 'success',
-      data: kycData[0].kycDetails
+      data: kycData[0].kycDetails || null // Return null if no KYC details found
     });
   } catch (error) {
     res.status(500).json({
