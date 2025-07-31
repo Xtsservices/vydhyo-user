@@ -109,7 +109,11 @@ exports.getAllUsers = async (req, res) => {
     
 
     console.log("obj",obj)
-    const users = await Users.find(obj, { refreshToken: 0 }) .sort({ createdAt: -1 })
+    const users = await Users.find(obj, { refreshToken: 0,  kyc: 0, 
+      address: 0, 
+      'specialization.drgreeCertificate': 0, 
+      'specialization.specializationCertificate': 0  }) // Exclude kyc, address, and image fields in specialization
+      .sort({ createdAt: -1 })
      .skip(skip)
       .limit(limit);
 
