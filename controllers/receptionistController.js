@@ -452,7 +452,6 @@ exports.fetchMyDoctorPatients = async (req, res) => {
           })
           .select("medName quantity status createdAt medInventoryId pharmacyMedID _id");
 
-          console.log("medicines fetched for patient:", medicines[0])
         // Skip patient if no tests and no medicines
         if (tests.length === 0 && medicines.length === 0) {
           console.log(`Skipping patient ${patientId}: No tests or medicines`);
@@ -540,8 +539,8 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             pharmacyMedID: med.pharmacyMedID,
             medName: med.medName,
             quantity: med.quantity,
-            gst : med.gst || 6,
-            cgst : med.cgst || 6,
+            gst : med?.medInventoryId?.gst || 6,
+            cgst : med?.medInventoryId?.cgst || 6,
             status: med.status,
             price: med.medInventoryId?.price ?? null,
             createdAt: med.createdAt,
