@@ -1469,6 +1469,8 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
               price: { $ifNull: ["$inventoryData.price", null] },
               quantity: "$quantity",
               status: "$status",
+             gst: { $ifNull: ["$inventoryData.gst", 6] },
+             cgst: { $ifNull: ["$inventoryData.cgst", 6] },
               createdAt: "$createdAt",
               pharmacyMedID: "$pharmacyMedID",
             },

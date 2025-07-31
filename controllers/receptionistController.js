@@ -405,7 +405,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
       role: "patient",
       userId: { $in: patientIds },
       isDeleted: false,
-    }).select("firstname lastname email userId DOB gender bloodgroup mobile"); 
+    }).select("firstname lastname email userId DOB gender bloodgroup mobile age"); 
 
        console.log("Patients fetched from database:", patients.length)
     if (!patients.length) {
@@ -419,9 +419,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
           totalPatients:0
         }
       });
-      
-      return res.status(404).json({ message: "No patients found for this doctor" });
-    }
+          }
 
     // Build patient data
     const patientDetails = await Promise.all(
@@ -450,10 +448,11 @@ exports.fetchMyDoctorPatients = async (req, res) => {
           .populate({
             path: "medInventoryId",
             model: MedInventory,
-            select: "medName price",
+            select: "medName price gst cgst",
           })
           .select("medName quantity status createdAt medInventoryId pharmacyMedID _id");
 
+          console.log("medicines fetched for patient:", medicines[0])
         // Skip patient if no tests and no medicines
         if (tests.length === 0 && medicines.length === 0) {
           console.log(`Skipping patient ${patientId}: No tests or medicines`);
@@ -516,6 +515,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
           mobile: patient.mobile,
           email: patient.email,
           DOB: patient.DOB,
+          age: patient.age,
           gender: patient.gender,
           bloodgroup: patient.bloodgroup,
           appointments: appointmentDetails,
@@ -540,6 +540,8 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             pharmacyMedID: med.pharmacyMedID,
             medName: med.medName,
             quantity: med.quantity,
+            gst : med.gst || 6,
+            cgst : med.cgst || 6,
             status: med.status,
             price: med.medInventoryId?.price ?? null,
             createdAt: med.createdAt,
