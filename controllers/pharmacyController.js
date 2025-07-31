@@ -60,7 +60,7 @@ const upload = multer({
 
 exports.addMedInventory = async (req, res) => {
   try {
-    const { medName, price, quantity, doctorId } = req.body;
+    const { medName, price, quantity, doctorId, gst, cgst } = req.body;
 
     // Validate required fields
     if (!medName || !price || !quantity || !doctorId) {
@@ -89,6 +89,8 @@ exports.addMedInventory = async (req, res) => {
       price,
       quantity,
       doctorId,
+       gst: gst !== undefined ? gst : 6, // Use provided gst or default to 6
+      cgst: cgst !== undefined ? cgst : 6 
     });
 
     // Save to database
@@ -145,7 +147,7 @@ exports.addMedInventoryBulk = [
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const data = xlsx.utils.sheet_to_json(sheet, {
-        header: ["medName", "price", "quantity"],
+        header: ["medName", "price", "quantity", "gst", "cgst"],
       });
 
       if (data.length <= 1) {
@@ -157,12 +159,12 @@ exports.addMedInventoryBulk = [
       }
 
       // Validate headers
-      const expectedHeaders = ["medName", "price", "quantity"];
+      const expectedHeaders = ["medName", "price", "quantity", "gst", "cgst"];
       const firstRow = data[0];
       if (!expectedHeaders.every((header) => header in firstRow)) {
         return res.status(400).json({
           status: "fail",
-          message: "Excel file must have headers: medName, price, quantity",
+          message: "Excel file must have headers: medName, price, quantity, gst, cgst",
         });
       }
 
@@ -181,7 +183,8 @@ exports.addMedInventoryBulk = [
 
       for (const [index, row] of data.entries()) {
         // Override doctorId from body/headers
-        const medicine = { ...row, doctorId };
+        const medicine = { ...row, doctorId, gst: row.gst !== undefined ? row.gst : 6, // Default to 6 if not provided
+          cgst: row.cgst !== undefined ? row.cgst : 6 };
 
         // Validate row
         const { error } = medInventoryValidationSchema.validate(row, {
@@ -215,6 +218,8 @@ exports.addMedInventoryBulk = [
           price: medicine.price,
           quantity: medicine.quantity,
           doctorId: doctorId,
+            gst: medicine.gst,
+          cgst: medicine.cgst,
           createdAt: new Date(),
         });
         processedMedNames.add(medNameLower);
@@ -437,8 +442,10 @@ exports.uploadImageToAirtelAPI = async (filePath) => {
 exports.sendWhatsQrAppMessage = async (order, whatsappuploadedid) => {
   console.log("order==",order)
   const userId = order.patientId; // Extract userId from the order object
+  const doctorId = order.doctorId; // Extract doctorId from the order object
   console.log("userId====",userId)
   const user = await User.findOne({ userId: userId });
+  const doctor = await User.findOne({ userId: doctorId });
 
   const phoneNumber =   user?.mobile; // Get the phone number from the user details
 console.log("user====",user)
@@ -451,8 +458,8 @@ console.log("user====",user)
   let toNumber = "91".concat(phoneNumber);
 
 
- const doctorfirstname = "Dr.";
-    const doctorlastname = "Vaidya";
+ const doctorfirstname = doctor?.firstname || "Doctor";
+    const doctorlastname = doctor?.lastname || "Unknown";
 
     sendImageWithAttachment(
       toNumber,

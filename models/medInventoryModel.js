@@ -20,6 +20,18 @@ const medInventorySchema = new mongoose.Schema({
     type: String,
     required: [true, 'Doctor ID is required']
   },
+   gst: {
+    type: Number,
+    default: 6,
+    min: [0, 'GST cannot be negative'],
+    max: [100, 'GST cannot exceed 100']
+  },
+  cgst: {
+    type: Number,
+    default: 6,
+    min: [0, 'CGST cannot be negative'],
+    max: [100, 'CGST cannot exceed 100']
+  },
   createdAt: {
     type: Date,
     default: Date.now

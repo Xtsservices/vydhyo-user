@@ -16,7 +16,17 @@ const medInventoryValidationSchema = Joi.object({
     'number.integer': 'Quantity must be an integer',
     'number.min': 'Quantity must be at least 1',
     'any.required': 'Quantity is required'
-  })
+  }),
+   gst: Joi.number().min(0).max(100).default(6).messages({
+    'number.base': 'GST must be a number',
+    'number.min': 'GST cannot be negative',
+    'number.max': 'GST cannot exceed 100',
+  }),
+  cgst: Joi.number().min(0).max(100).default(6).messages({
+    'number.base': 'CGST must be a number',
+    'number.min': 'CGST cannot be negative',
+    'number.max': 'CGST cannot exceed 100',
+  }),
 });
 
 
