@@ -95,6 +95,7 @@ const eprescriptionSchema = new mongoose.Schema({
       type: String,
       default: null,
     },
+    other: { type: Object, default: null },
   },
   diagnosis: {
     type: new mongoose.Schema(

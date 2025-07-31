@@ -958,6 +958,8 @@ exports.addPrescription = async (req, res) => {
             weight: vitals?.weight || null,
             bmi: vitals?.bmi || null,
             investigationFindings: vitals?.investigationFindings || null,
+            other: vitals?.other || null,
+
           },
           diagnosis: diagnosis
             ? {
@@ -1011,6 +1013,8 @@ exports.addPrescription = async (req, res) => {
           weight: vitals?.weight || null,
           bmi: vitals?.bmi || null,
           investigationFindings: vitals?.investigationFindings || null,
+          other: vitals?.other || null,
+
         },
         diagnosis: diagnosis
           ? {

@@ -118,6 +118,7 @@ const prescriptionValidationSchema = Joi.object({
     weight: Joi.string().allow(null, "").optional(),
     bmi: Joi.string().allow(null, "").optional(),
     investigationFindings: Joi.string().allow(null, "").optional(),
+     other: Joi.object().pattern(Joi.string(), Joi.any()).allow(null).optional(),
   }).optional(),
   diagnosis: Joi.object({
     diagnosisNote: Joi.string().allow(null, "").optional(),
