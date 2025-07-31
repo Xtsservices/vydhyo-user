@@ -503,7 +503,7 @@ const updatePatientTestPrice = async (req, res) => {
     }
 
     // Step 3: Check if testName exists in TestInventory
-    let test = await TestInventory.findOne({ testName: trimmedTestName });
+    let test = await TestInventory.findOne({ testName: trimmedTestName , doctorId});
 
     // Step 4: If not found, create new test in inventory
     if (!test) {
