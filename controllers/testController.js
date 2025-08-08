@@ -426,6 +426,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
             },
           },
           doctorId: { $first: "$doctorId" },
+          latestCreatedAt: { $max: "$createdAt" },
           tests: {
             $push: {
               _id: "$_id",
@@ -467,7 +468,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
         },
       },
       {
-        $sort: { patientId: -1 }, // Sort by patientId descending (latest on top)
+        $sort: { latestCreatedAt: -1 }, // Sort by patientId descending (latest on top)
       },
       {
         $facet: {

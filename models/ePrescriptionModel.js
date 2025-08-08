@@ -108,10 +108,7 @@ const eprescriptionSchema = new mongoose.Schema({
           type: String,
           default: null,
         },
-        PrescribeMedNotes: {
-          type: String,
-          default: null,
-        },
+       
         selectedTests: [
           {
             testName: {
@@ -169,6 +166,10 @@ const eprescriptionSchema = new mongoose.Schema({
     default: null,
   },
   advice: {
+     PrescribeMedNotes: {
+          type: String,
+          default: null,
+        },
     advice: {
       type: String,
       default: null,

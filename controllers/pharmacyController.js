@@ -965,7 +965,7 @@ exports.addPrescription = async (req, res) => {
             ? {
                 diagnosisNote: diagnosis.diagnosisNote || null,
                 testsNote: diagnosis.testsNote || null,
-                PrescribeMedNotes: diagnosis.PrescribeMedNotes || null,
+              
                 selectedTests: [
                   ...existingPrescriptionTests,
                   ...newTests,
@@ -977,6 +977,7 @@ exports.addPrescription = async (req, res) => {
               }
             : null,
           advice: {
+              PrescribeMedNotes: advice.PrescribeMedNotes || null,
             advice: advice?.advice || null,
             followUpDate: advice?.followUpDate || null,
           },
@@ -1020,12 +1021,13 @@ exports.addPrescription = async (req, res) => {
           ? {
               diagnosisNote: diagnosis.diagnosisNote || null,
               testsNote: diagnosis.testsNote || null,
-              PrescribeMedNotes: diagnosis.PrescribeMedNotes || null,
+             
               selectedTests: diagnosis.selectedTests || [],
               medications: diagnosis.medications || [],
             }
           : null,
         advice: {
+           PrescribeMedNotes: advice.PrescribeMedNotes || null,
           advice: advice?.advice || null,
           followUpDate: advice?.followUpDate || null,
         },
@@ -1112,7 +1114,7 @@ exports.getPrescriptionsByAppointmentIds = async (req, res) => {
 exports.getEPrescriptionByPatientId = async (req, res) => {
   try {
     const { patientId } = req.params;
-
+    const doctorId = req.params.doctorId || req.headers.userid
     if (!patientId) {
       return res.status(400).json({
         status: "fail",
@@ -1120,7 +1122,7 @@ exports.getEPrescriptionByPatientId = async (req, res) => {
       });
     }
 
-    const prescriptions = await eprescriptionsModel.find({ userId: patientId });
+    const prescriptions = await eprescriptionsModel.find({ userId: patientId, doctorId :doctorId });
 
     if (!prescriptions || prescriptions.length === 0) {
       return res.status(200).json({
@@ -1466,6 +1468,7 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
             },
           },
           doctorId: { $first: "$doctorId" },
+          latestCreatedAt: { $max: "$createdAt" },
           medicines: {
             $push: {
               _id: "$_id",
@@ -1510,7 +1513,7 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
         },
       },
       {
-        $sort: { patientId: -1 }, // Sort by patientId descending (latest on top)
+        $sort: { latestCreatedAt: -1 }, // Sort by patientId descending (latest on top)
       },
       {
         $facet: {

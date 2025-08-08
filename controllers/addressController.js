@@ -393,3 +393,44 @@ exports.deleteClinicAddress = async (req, res) => {
     });
   }
 };
+
+exports.searchClinics = async (req, res) => {
+  try {
+    const { search = '', lat, lng, radius = 10 } = req.query;
+
+    const query = {
+      type: 'Clinic',
+      status: 'Active',
+      $or: [
+        { clinicName: { $regex: search, $options: 'i' } },
+        { city: { $regex: search, $options: 'i' } },
+        { address: { $regex: search, $options: 'i' } }
+      ]
+    };
+
+    // If coordinates are provided, use geolocation filter
+    if (lat && lng) {
+      query.location = {
+        $near: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(lng), parseFloat(lat)]
+          },
+          $maxDistance: parseFloat(radius) * 1000 // in meters
+        }
+      };
+    }
+
+    const clinics = await UserAddress.find(query).select('-headerImage -digitalSignature').limit(50)
+  .lean(); // add pagination as needed
+
+    res.status(200).json({
+      status: 'success',
+      results: clinics.length,
+      data: clinics
+    });
+  } catch (err) {
+    console.error('Clinic search error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+};

@@ -123,13 +123,13 @@ const prescriptionValidationSchema = Joi.object({
   diagnosis: Joi.object({
     diagnosisNote: Joi.string().allow(null, "").optional(),
     testsNote: Joi.string().allow(null, "").optional(),
-    PrescribeMedNotes: Joi.string().allow(null, "").optional(),
     selectedTests: Joi.array().items(testValidationSchema).min(0).optional(),
     medications: Joi.array().items(medicineValidationSchema).min(0).optional(),
   })
     .optional()
     .allow(null),
   advice: Joi.object({
+    PrescribeMedNotes: Joi.string().allow(null, "").optional(),
     advice: Joi.string().allow(null, "").optional(),
     followUpDate: Joi.string().allow(null, "").optional(),
   }).optional(),
