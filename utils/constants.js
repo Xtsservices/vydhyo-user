@@ -15,6 +15,15 @@ const PREFIX_SEQUENCE = {
     EPRESCRIPTION_MODEL: "eprescriptions",
     SEQUENCE: "VYDEPRES",
   },
+   PHARMACY_SEQUENCE: {
+    PHARMACY_MODEL: "Pharmacy",
+    SEQUENCE: "VYDPHARM",
+  },
+  LAB_SEQUENCE: {
+    LAB_MODEL: "Lab",
+    SEQUENCE: "VYDLAB",
+  },
+
 };
 
 module.exports = PREFIX_SEQUENCE;

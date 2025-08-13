@@ -8,6 +8,29 @@ const PREFIX_SEQUENCE = require("../utils/constants");
 const Counter = require("../sequence/sequenceSchema");
 const multer = require('multer');
 const xlsx = require('xlsx');
+const axios = require("axios");
+const UserAddress = require("../models/addressModel");
+
+
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand
+} = require("@aws-sdk/client-s3");
+
+const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
+const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
+const AWS_ACCESS_KEY = process.env.AWS_ACCESS_KEY;
+const AWS_SECRET_KEY = process.env.AWS_SECRET_KEY;
+
+const s3Client = new S3Client({
+  region: AWS_BUCKET_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY,
+    secretAccessKey: AWS_SECRET_KEY
+  }
+});
 
 // Configure multer for file upload
 const upload = multer({
@@ -489,6 +512,75 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
     const patients = result.paginatedResults || [];
     const totalPatients = result.totalCount[0]?.count || 0;
     const totalPages = Math.ceil(totalPatients / limitNum);
+
+    // Step 2: Fetch addressId from Appointment Service
+        for (let patient of patients) {
+          try {
+            const resp = await axios.get(
+              `http://localhost:4005/appointment/getAppointmentDataByUserIdAndDoctorId`,
+              {
+                params: {
+                  doctorId: patient.doctorId,
+                  userId: patient.patientId,
+                },
+                headers: {
+            'Content-Type': 'application/json',
+            // Add authorization headers if needed
+            // 'Authorization': `Bearer ${req.headers.authorization}`
+          },
+              },
+               
+            );
+            const addressId = resp.data?.data?.addressId || null;
+            patient.addressId = addressId;
+          if (addressId) {
+              const address = await UserAddress.findOne({ addressId }).lean();
+              if (address && address.labName) {
+                let labHeaderUrl = null;
+    
+    console.log("Pharmacy header from DB:", address);
+    
+            if (address.labHeader) {
+              // Generate signed S3 URL for pharmacy header image
+              try {
+                labHeaderUrl = await getSignedUrl(
+                  s3Client,
+                  new GetObjectCommand({
+                    Bucket: process.env.AWS_BUCKET_NAME,
+                    Key: address.labHeader,
+                  }),
+                  { expiresIn: 300 }
+                );
+              } catch (s3Err) {
+                console.error(`Error fetching S3 signed URL:`, s3Err.message);
+              }
+            }
+    
+                patient.labData = {
+                  labName: address.labName,
+                  labRegistrationNo: address.labRegistrationNo,
+                  labGst: address.labGst,
+                  labPan: address.labPan,
+                  labAddress: address.labAddress,
+                  labId: address.labId,
+                  labHeaderUrl,
+                };
+              } else {
+                patient.labData = null;
+              }
+            } else {
+              patient.labData = null;
+            }
+          } catch (err) {
+            console.error(
+              `Error fetching appointment or address for ${patient.patientId}`,
+              err.message
+            );
+            patient.addressId = null;
+            patient.labData = null;
+          }
+        }
+    
 
     res.status(200).json({
       status: "success",

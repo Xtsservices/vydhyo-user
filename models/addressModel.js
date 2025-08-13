@@ -24,9 +24,63 @@ const addressSchema = new mongoose.Schema({
     required: true,
     // unique: false,
   },
+   pharmacyName: {
+    type: String,
+    default: null
+  },
+  labName: {
+    type: String,
+    default: null
+  },
+  pharmacyRegistrationNo: {
+    type: String,
+    // unique: true,
+    sparse: true,
+    required: function () {
+      return this.pharmacyName && this.pharmacyName.trim() !== '';
+    },
+  },
+  labRegistrationNo: {
+    type: String,
+    // unique: true,
+    sparse: true,
+   required: function () {
+      return this.labName && this.labName.trim() !== '';
+    },
+  },
+  pharmacyGst: {
+    type: String,
+   required: function () {
+      return this.pharmacyName && this.pharmacyName.trim() !== '';
+    },
+  },
+  labGst: {
+    type: String,
+    required: function() { return this.labName != null; }
+  },
+  pharmacyPan: {
+    type: String,
+   required: function () {
+      return this.pharmacyName && this.pharmacyName.trim() !== '';
+    },
+  },
+  labPan: {
+    type: String,
+    default: null // Optional even when labName is provided
+  },
   address: {
     type: String,
     default: null
+  },
+   pharmacyAddress: {
+    type: String,
+    default: null,
+    required: function() { return this.pharmacyName != null; }
+  },
+  labAddress: {
+    type: String,
+    default: null,
+    required: function() { return this.labName != null; }
   },
   city: {
     type: String,
@@ -91,10 +145,26 @@ const addressSchema = new mongoose.Schema({
     type: String,
     default: null, // Store the file path or URL of the header image
   },
+   pharmacyHeader: {
+    type: String,
+    default: null
+  },
+  labHeader: {
+    type: String,
+    default: null
+  },
    digitalSignature: {
     type: String,
     default: null, // Store the base64 string of the digital signature (optional)
   },
+  pharmacyId: {
+  type: String,
+  default: null
+},
+labId: {
+  type: String,
+  default: null
+}
 });
 
 

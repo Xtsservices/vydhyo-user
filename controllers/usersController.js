@@ -942,3 +942,46 @@ exports.getAllDoctorsBySpecializations = async (req, res) => {
         });
     }
 };
+
+exports.getUserIds = async(req, res) => {
+  try {
+    console.log("am in users")
+    // Step 1: Extract query parameters
+    const query = req.query;
+    console.log("am in users, query", query)
+
+    // Step 2: Validate query (basic validation, adjust as needed)
+    if (!query || !query.$or || !Array.isArray(query.$or)) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Invalid query format. Expected $or with familyProvider or userId conditions.',
+      });
+    }
+
+    // Step 3: Fetch users from the database
+    const users = await Users.find(query).select('userId firstname lastname'); // Select only necessary fields
+    console.log("am in users, users", users)
+
+    // Step 4: Check if users were found
+    if (!users || users.length === 0) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No users found matching the criteria',
+      });
+    }
+
+    // Step 5: Return the users
+    return res.status(200).json({
+      status: 'success',
+      message: 'Users retrieved successfully',
+      data: users,
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Error retrieving users',
+      error: error.message,
+    });
+  }
+}

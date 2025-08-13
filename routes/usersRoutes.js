@@ -19,14 +19,16 @@ const {
     getDoctorsCount,
     getUserClinicsData,
     getKycByUserId,
+    getUserIds,
    
 } = require('../controllers/usersController');
-const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader } = require('../controllers/addressController');
+const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
 // Configure multer for file handling
 const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporarily
 
+const upload2 = multer({ storage: multer.memoryStorage() });
 // Routes for user management
 router.get('/AllUsers', getAllUsers);
 router.get('/getDoctorsCount', getDoctorsCount);
@@ -47,6 +49,16 @@ router.post('/getUsersByIds', getUsersByIds);
 router.get('/getAddress', getAddress);
 router.get('/getClinicAddress', getClinicAddress);
 router.post('/addAddress', addAddress);
+// router.post('/addAddressFromWeb', upload2.single('pharmacyHeader'), addAddressFromWeb);
+router.post(
+  '/addAddressFromWeb',
+  upload2.fields([
+    { name: 'pharmacyHeader', maxCount: 1 },
+    { name: 'labHeader', maxCount: 1 }
+  ]),
+  addAddressFromWeb
+);
+
 router.put('/updateAddress', updateAddress);
 router.post('/uploadClinicHeader',  uploadClinicHeader);
 
@@ -76,6 +88,7 @@ router.post("/ePrescription", ePrescription);
 router.get('/getAllSpecializations', getAllSpecializations);
 router.get('/getAllDoctorsBySpecializations/:specialization', getAllDoctorsBySpecializations);
 
+router.get("/getUserIds", getUserIds);
 
 
 module.exports = router;

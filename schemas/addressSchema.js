@@ -7,8 +7,68 @@ const addressJoiSchema = Joi.object({
     userId: Joi.string().required(),
     type: Joi.string().required(),
     clinicName: Joi.string().required(),
+   pharmacyName: Joi.string().allow(null),
+labName: Joi.string().allow(null, '').optional(),
+  pharmacyRegistrationNo: Joi.when('pharmacyName', {
+    is: Joi.string().trim().min(1),
+    then: Joi.string().required().messages({
+      'any.required': 'Pharmacy registration number is required when pharmacyName is provided'
+    }),
+    otherwise: Joi.string().allow(null)
+  }),
+
+  labRegistrationNo: Joi.when('labName', {
+  is: Joi.string().trim().min(1).required(),
+  then: Joi.string().required().messages({
+    'any.required': 'Lab registration number is required when labName is provided',
+  }),
+  otherwise: Joi.string().allow(null, '').optional(),
+}),
+
+  pharmacyGst: Joi.when('pharmacyName', {
+    is: Joi.string().trim().min(1),
+    then: Joi.string().required().messages({
+      'any.required': 'Pharmacy GST number is required when pharmacyName is provided'
+    }),
+    otherwise: Joi.string().allow(null)
+  }),
+ labGst: Joi.when('labName', {
+  is: Joi.string().trim().min(1).required(),
+  then: Joi.string().required().messages({
+    'any.required': 'Lab GST number is required when labName is provided'
+  }),
+  otherwise: Joi.string().allow(null, '').optional()
+}),
+  pharmacyPan: Joi.when('pharmacyName', {
+    is: Joi.string().trim().min(1),
+    then: Joi.string().required().messages({
+      'any.required': 'Pharmacy PAN number is required when pharmacyName is provided'
+    }),
+    otherwise: Joi.string().allow(null)
+  }),
+  labPan: Joi.when('labName', {
+    is: Joi.string().trim().min(1).required(),
+    then: Joi.string().required().messages({
+      'string.base': 'Lab PAN number must be a string'
+    }),
+   otherwise: Joi.string().allow(null, '').optional()
+  }),
     mobile: Joi.string().allow(null),
     address: Joi.string().allow(null),
+   pharmacyAddress: Joi.when('pharmacyName', {
+    is: Joi.string().trim().min(1),
+    then: Joi.string().required().messages({
+      'any.required': 'Pharmacy address is required when pharmacyName is provided'
+    }),
+    otherwise: Joi.string().allow(null)
+  }),
+labAddress: Joi.when('labName', {
+  is: Joi.string().trim().min(1).required(),
+  then: Joi.string().required().messages({
+    'any.required': 'Lab address is required when labName is provided'
+  }),
+  otherwise: Joi.string().allow(null, '').optional()
+}),
     city: Joi.string().allow(null),
     state: Joi.string().allow(null),
     country: Joi.string().allow(null),
@@ -38,6 +98,8 @@ const addressJoiSchema = Joi.object({
         }),
         otherwise: Joi.string().pattern(timeRegex).allow(null)
     }),
+    pharmacyHeader: Joi.string().uri().allow(null).optional(),
+    labHeader: Joi.string().uri().allow(null).optional(),
 
 }).custom((value, helpers) => {
     // Time validation

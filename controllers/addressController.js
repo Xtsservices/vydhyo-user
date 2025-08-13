@@ -7,8 +7,20 @@ const dotenv = require('dotenv');
 const axios = require('axios');
 const deleteAddressValidationSchema = require('../schemas/deleteClinicSchema');
 dotenv.config();
+const Sequence = require("../sequence/sequenceSchema");
+const sequenceConstant = require('../utils/constants')
+
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand
+} = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const multer = require('multer');
+const pharmacyMapping = require('../models/pharmacyMapping');
+const labMapping = require('../models/labMapping');
+const crypto = require("crypto");
 
 // Multer configuration for memory storage
 const storage = multer.memoryStorage();
@@ -37,6 +49,23 @@ const upload = multer({
     cb(new Error('Only JPEG and PNG images are allowed'));
   },
 });
+
+
+const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
+const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
+const AWS_ACCESS_KEY = process.env.AWS_ACCESS_KEY;
+const AWS_SECRET_KEY = process.env.AWS_SECRET_KEY;
+
+const s3Client = new S3Client({
+  region: AWS_BUCKET_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY,
+    secretAccessKey: AWS_SECRET_KEY
+  }
+});
+
+const generateFileName = (bytes = 16) =>
+  crypto.randomBytes(bytes).toString("hex");
 
 
 exports.addAddress = async (req, res) => {
@@ -71,6 +100,409 @@ exports.addAddress = async (req, res) => {
     });
   }
 }
+
+
+exports.addAddressFromWeb2 = async (req, res) => {
+  console.log("am in====", req.body)
+  console.log("am in====labname", req.body.labName)
+  try {
+    const userId = req.body.userId || req.headers.userid;
+    req.body.userId = userId;
+    const { error } = addressValidationSchema.validate(req.body, { abortEarly: false });
+  console.log("am in====", error)
+
+    if (error) {
+      return res.status(400).json({
+        status: 'fail',
+        message: error.details[0].message,
+      });
+    }
+
+    // Check for existing pharmacy/lab by registration number
+    if (req.body.pharmacyRegistrationNo) {
+      const existingPharmacy = await UserAddress.findOne({
+        pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+        pharmacyId: { $ne: null }
+      });
+  console.log("am in==5==")
+      
+      if (existingPharmacy) {
+        const existingMapping = await pharmacyMapping.findOne({
+          pharmacyId: existingPharmacy.pharmacyId,
+          doctorId: userId
+        });
+  console.log("am in=6===")
+        
+        if (!existingMapping) {
+          // Return warning for duplicate pharmacy
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This pharmacy is already registered with another doctor. Do you want to link it?',
+            data: {
+              pharmacyId: existingPharmacy.pharmacyId,
+              existingDoctorId: existingPharmacy.userId
+            }
+          });
+        }
+      }
+    }
+  console.log("am in==7==")
+
+    if (req.body.labRegistrationNo) {
+      const existingLab = await UserAddress.findOne({
+        labRegistrationNo: req.body.labRegistrationNo,
+        labId: { $ne: null }
+      });
+  console.log("am in==9==")
+      
+      if (existingLab) {
+        const existingMapping = await labMapping.findOne({
+          labId: existingLab.labId,
+          doctorId: userId
+        });
+  console.log("am in==2==")
+        
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This lab is already registered with another doctor. Do you want to link it?',
+            data: {
+              labId: existingLab.labId,
+              existingDoctorId: existingLab.userId
+            }
+          });
+        }
+      }
+    }
+  console.log("am in==1==")
+
+    // Handle file uploads for pharmacy/lab headers
+    const file = req.file;
+  console.log("am in====file",file)
+
+    let photo = null;
+    if (file) {
+      photo = generateFileName();
+      const uploadParams = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Body: file.buffer,
+        Key: photo,
+        ContentType: file.mimetype
+      };
+      await s3Client.send(new PutObjectCommand(uploadParams));
+      
+      if (req.body.pharmacyName) {
+        req.body.pharmacyHeader = photo;
+      } else if (req.body.labName) {
+        req.body.labHeader = photo;
+      } else {
+        req.body.headerImage = photo;
+      }
+    }
+  console.log("am in==23==")
+
+    // Generate IDs for new pharmacy/lab
+    if (req.body.pharmacyName && !req.body.pharmacyId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.PHARMACY_SEQUENCE.PHARMACY_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.pharmacyId = sequenceConstant.PHARMACY_SEQUENCE.SEQUENCE.concat(counter.seq);
+    }
+  console.log("am in==34==")
+
+    if (req.body.labName && !req.body.labId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.LAB_SEQUENCE.LAB_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE.concat(counter.seq);
+    }
+  console.log("am in===67=")
+
+    req.body.createdBy = userId;
+    req.body.updatedBy = userId;
+    req.body.addressId = uuidv4().replace(/-/g, '');
+    req.body.status = 'Active';
+    req.body.createdAt = new Date();
+    req.body.updatedAt = new Date();
+  console.log("am in==78==")
+
+    const userAddress = await UserAddress.create(req.body);
+  console.log("am in==89==")
+
+    // Create mapping entries
+    if (req.body.pharmacyId) {
+      await pharmacyMapping.create({
+        doctorId: userId,
+        clinicId: req.body.addressId,
+        pharmacyId: req.body.pharmacyId,
+        status: 'Active'
+      });
+    }
+  console.log("am in==678==")
+
+    if (req.body.labId) {
+      await labMapping.create({
+        doctorId: userId,
+        clinicId: req.body.addressId,
+        labId: req.body.labId,
+        status: 'Active'
+      });
+    }
+  console.log("am in==677==")
+
+    // Get mapping counts
+    const pharmacyMappingCount = req.body.pharmacyId 
+      ? await pharmacyMapping.countDocuments({ pharmacyId: req.body.pharmacyId, status: 'Active' })
+      : 0;
+    const labMappingCount = req.body.labId 
+      ? await labMapping.countDocuments({ labId: req.body.labId, status: 'Active' })
+      : 0;
+  console.log("am in===99876=")
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Address added successfully',
+      data: {
+        userAddress,
+        pharmacyMappingCount,
+        labMappingCount
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
+exports.addAddressFromWeb = async (req, res) => {
+  console.log("Incoming Body:", req.body);
+
+  try {
+    const userId = req.body.userId || req.headers.userid;
+    req.body.userId = userId;
+ const bypassCheck = req.query.bypassCheck
+    // Validate
+    const { error } = addressValidationSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+      return res.status(400).json({
+        status: 'fail',
+        message: error.details.map(e => e.message).join(', '),
+      });
+    }
+
+    /** ─────────────── Pharmacy check ─────────────── **/
+    if (req.body.pharmacyRegistrationNo && !bypassCheck) {
+      const existingPharmacy = await UserAddress.findOne({
+        pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+        pharmacyId: { $ne: null },
+         userId: { $ne: userId }
+      });
+
+      if (existingPharmacy) {
+        // If same doctor, allow linking silently
+        const existingMapping = await pharmacyMapping.findOne({
+          pharmacyId: existingPharmacy.pharmacyId,
+          doctorId: userId
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This pharmacy is already registered with another doctor. Do you want to link it?',
+            data: {
+              pharmacyId: existingPharmacy.pharmacyId,
+              existingDoctorId: existingPharmacy.userId
+            }
+          });
+        }
+      }
+    }
+
+    /** ─────────────── Lab check ─────────────── **/
+    if (req.body.labRegistrationNo && !bypassCheck) {
+      const existingLab = await UserAddress.findOne({
+        labRegistrationNo: req.body.labRegistrationNo,
+        labId: { $ne: null }
+      });
+
+      if (existingLab) {
+        const existingMapping = await labMapping.findOne({
+          labId: existingLab.labId,
+          doctorId: userId
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This lab is already registered with another doctor. Do you want to link it?',
+            data: {
+              labId: existingLab.labId,
+              existingDoctorId: existingLab.userId
+            }
+          });
+        }
+      }
+    }
+
+    /** ─────────────── File Upload (optional) ─────────────── **/
+   /** ─────────────── File Upload (optional) ─────────────── **/
+if (req.files) {
+  // Pharmacy Header
+  if (req.files['pharmacyHeader'] && req.files['pharmacyHeader'][0]) {
+    const pharmacyPhoto = generateFileName();
+    await s3Client.send(new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Body: req.files['pharmacyHeader'][0].buffer,
+      Key: pharmacyPhoto,
+      ContentType: req.files['pharmacyHeader'][0].mimetype
+    }));
+    req.body.pharmacyHeader = pharmacyPhoto;
+  }
+
+  // Lab Header
+  if (req.files['labHeader'] && req.files['labHeader'][0]) {
+    const labPhoto = generateFileName();
+    await s3Client.send(new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Body: req.files['labHeader'][0].buffer,
+      Key: labPhoto,
+      ContentType: req.files['labHeader'][0].mimetype
+    }));
+    req.body.labHeader = labPhoto;
+  }
+}
+
+
+    /** ─────────────── ID generation ─────────────── **/
+    if (req.body.pharmacyName && !req.body.pharmacyId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.PHARMACY_SEQUENCE.PHARMACY_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.pharmacyId = sequenceConstant.PHARMACY_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    if (req.body.labName && !req.body.labId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.LAB_SEQUENCE.LAB_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    /** ─────────────── Create Address ─────────────── **/
+    req.body.createdBy = userId;
+    req.body.updatedBy = userId;
+    req.body.addressId = uuidv4().replace(/-/g, '');
+    req.body.status = 'Active';
+    req.body.createdAt = new Date();
+    req.body.updatedAt = new Date();
+
+    const userAddress = await UserAddress.create(req.body);
+
+    /** ─────────────── Create mappings ─────────────── **/
+    if (req.body.pharmacyId) {
+      await pharmacyMapping.create({
+        doctorId: userId,
+        clinicId: req.body.addressId,
+        pharmacyId: req.body.pharmacyId,
+         pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+        status: 'Active'
+      });
+    }
+
+    if (req.body.labId) {
+      await labMapping.create({
+        doctorId: userId,
+        clinicId: req.body.addressId,
+        labId: req.body.labId,
+        status: 'Active'
+      });
+    }
+
+    /** ─────────────── Count mappings ─────────────── **/
+    const pharmacyMappingCount = req.body.pharmacyId
+      ? await pharmacyMapping.countDocuments({ pharmacyId: req.body.pharmacyId, status: 'Active' })
+      : 0;
+    const labMappingCount = req.body.labId
+      ? await labMapping.countDocuments({ labId: req.body.labId, status: 'Active' })
+      : 0;
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Address added successfully',
+      data: {
+        userAddress,
+        pharmacyMappingCount,
+        labMappingCount
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
+
+
+// New endpoint to confirm linking existing pharmacy/lab
+exports.confirmLinkExisting = async (req, res) => {
+  try {
+    const { userId, clinicId, pharmacyId, labId } = req.body;
+    
+    if (pharmacyId) {
+      await pharmacyMapping.create({
+        doctorId: userId,
+        clinicId,
+        pharmacyId,
+        status: 'Active'
+      });
+    }
+
+    if (labId) {
+      await labMapping.create({
+        doctorId: userId,
+        clinicId,
+        labId,
+        status: 'Active'
+      });
+    }
+
+    const pharmacyMappingCount = pharmacyId 
+      ? await pharmacyMapping.countDocuments({ pharmacyId, status: 'Active' })
+      : 0;
+    const labMappingCount = labId 
+      ? await labMapping.countDocuments({ labId, status: 'Active' })
+      : 0;
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Successfully linked existing pharmacy/lab',
+      data: {
+        pharmacyMappingCount,
+        labMappingCount
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
+
 
 exports.getAddress = async (req, res) => {
   try {

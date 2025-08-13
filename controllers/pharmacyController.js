@@ -31,6 +31,26 @@ const {
   uploadAttachmentToS3,
 } = require("../utils/attachmentService");
 
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand
+} = require("@aws-sdk/client-s3");
+
+const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
+const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
+const AWS_ACCESS_KEY = process.env.AWS_ACCESS_KEY;
+const AWS_SECRET_KEY = process.env.AWS_SECRET_KEY;
+
+const s3Client = new S3Client({
+  region: AWS_BUCKET_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY,
+    secretAccessKey: AWS_SECRET_KEY
+  }
+});
+
 const { unlink } = require('fs').promises;
 const path = require('path')
 const FormData = require('form-data');
@@ -1432,6 +1452,8 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
           preserveNullAndEmptyArrays: true,
         },
       },
+
+      
       // Add searchText filter for patientName after userData lookup
       ...(searchText ? [{
         $match: {
@@ -1535,6 +1557,74 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
     const totalPatients = result?.totalCount[0]?.count || 0;
     const totalPages = Math.ceil(totalPatients / limitNum);
     console.log('Results:', { patients: patients.length, totalPatients, totalPages }); // Debug log
+// Step 2: Fetch addressId from Appointment Service
+    for (let patient of patients) {
+      try {
+        const resp = await axios.get(
+          `http://localhost:4005/appointment/getAppointmentDataByUserIdAndDoctorId`,
+          {
+            params: {
+              doctorId: patient.doctorId,
+              userId: patient.patientId,
+            },
+            headers: {
+        'Content-Type': 'application/json',
+        // Add authorization headers if needed
+        // 'Authorization': `Bearer ${req.headers.authorization}`
+      },
+          },
+           
+        );
+        const addressId = resp.data?.data?.addressId || null;
+        patient.addressId = addressId;
+      if (addressId) {
+          const address = await UserAddress.findOne({ addressId }).lean();
+          if (address && address.pharmacyName) {
+            let pharmacyHeaderUrl = null;
+
+console.log("Pharmacy header from DB:", address);
+
+        if (address.pharmacyHeader) {
+          // Generate signed S3 URL for pharmacy header image
+          try {
+            pharmacyHeaderUrl = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: address.pharmacyHeader,
+              }),
+              { expiresIn: 300 }
+            );
+          } catch (s3Err) {
+            console.error(`Error fetching S3 signed URL:`, s3Err.message);
+          }
+        }
+
+            patient.pharmacyData = {
+              pharmacyName: address.pharmacyName,
+              pharmacyRegistrationNo: address.pharmacyRegistrationNo,
+              pharmacyGst: address.pharmacyGst,
+              pharmacyPan: address.pharmacyPan,
+              pharmacyAddress: address.pharmacyAddress,
+              pharmacyId: address.pharmacyId,
+              pharmacyHeaderUrl,
+            };
+          } else {
+            patient.pharmacyData = null;
+          }
+        } else {
+          patient.pharmacyData = null;
+        }
+      } catch (err) {
+        console.error(
+          `Error fetching appointment or address for ${patient.patientId}`,
+          err.message
+        );
+        patient.addressId = null;
+        patient.pharmacyData = null;
+      }
+    }
+
 
     res.status(200).json({
       status: "success",
