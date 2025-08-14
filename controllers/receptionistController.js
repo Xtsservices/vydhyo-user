@@ -8,12 +8,35 @@ const User = require("../models/usersModel");
 const PatientTest = require("../models/patientTestModel");
 const TestInventory = require("../models/testModel");
 const Medicine = require("../models/medicineModel");
+const UserAddress = require('../models/addressModel');
 const MedInventory = require("../models/medInventoryModel");
 const Users = require("../models/usersModel")
 const patientTestModel = require("../models/patientTestModel");
 const { createPayment } = require("../services/paymentServices");
 const axios = require('axios'); 
 const ePrescriptionModel = require("../models/ePrescriptionModel");
+
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand
+} = require("@aws-sdk/client-s3");
+
+const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
+const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
+const AWS_ACCESS_KEY = process.env.AWS_ACCESS_KEY;
+const AWS_SECRET_KEY = process.env.AWS_SECRET_KEY;
+
+const s3Client = new S3Client({
+  region: AWS_BUCKET_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY,
+    secretAccessKey: AWS_SECRET_KEY
+  }
+});
+
+
 
 exports.updateReceptionist = async (req, res) => {
   try {
@@ -1098,7 +1121,7 @@ exports.fetchMyDoctorPatients4 = async (req, res) => {
   }
 };
 
-exports.fetchMyDoctorPatients = async (req, res) => {
+exports.fetchMyDoctorPatients5 = async (req, res) => {
   try {
     const doctorId = req.params.doctorId || req.headers.userid;
     console.log("doctorId", doctorId);
@@ -1374,6 +1397,648 @@ exports.fetchMyDoctorPatients = async (req, res) => {
     });
   }
 };
+
+exports.fetchMyDoctorPatients6 = async (req, res) => {
+  try {
+    const doctorId = req.params.doctorId || req.headers.userid;
+    console.log("doctorId", doctorId);
+
+    if (!doctorId) {
+      return res.status(400).json({ error: "Invalid Doctor ID" });
+    }
+
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Collect patientIds from test and medicine data
+    const testPatientIds = await PatientTest.find({
+      doctorId,
+      isDeleted: false,
+    }).distinct("patientId");
+
+    const medicinePatientIds = await Medicine.find({
+      doctorId,
+      isDeleted: false,
+    }).distinct("patientId");
+
+    // Fetch appointments from appointment service
+    let appointments = [];
+    try {
+      const appointmentResponse = await axios.get(
+        `${process.env.APPOINTMENTS_SERVICE_URL}/appointment/getAppointmentsByDoctor/${doctorId}`,
+        {
+          headers: {
+            Authorization: req.headers.authorization,
+          },
+        }
+      );
+      appointments = appointmentResponse.data.data || [];
+    } catch (err) {
+      console.error("Error fetching appointments:", err.message);
+    }
+
+    const appointmentPatientIds = appointments.map((appt) => appt.userId);
+
+    // Merge and deduplicate patientIds
+    const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds, ...appointmentPatientIds])];
+    console.log("Total unique patientIds:", patientIds.length);
+
+    if (!patientIds.length) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: { page, limit, totalPages: 0, totalPatients: 0 },
+      });
+    }
+
+    // Fetch patient details
+    const patients = await User.find({
+      role: "patient",
+      userId: { $in: patientIds },
+      isDeleted: false,
+    }).select("firstname lastname email userId DOB gender bloodgroup mobile age");
+
+    console.log("Patients fetched from database:", patients.length);
+
+    if (!patients.length) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: { page, limit, totalPages: 0, totalPatients: 0 },
+      });
+    }
+
+    // Fetch prescriptions
+    const prescriptions = await ePrescriptionModel.find({
+      doctorId,
+      userId: { $in: patientIds },
+    }).select("prescriptionId appointmentId createdAt");
+
+    const appointmentToPrescriptionCreatedAtMap = {};
+    const prescriptionToAppointmentMap = {};
+
+    prescriptions.forEach((prescription) => {
+      const existing = appointmentToPrescriptionCreatedAtMap[prescription.appointmentId];
+      if (!existing || new Date(prescription.createdAt) > new Date(existing)) {
+        appointmentToPrescriptionCreatedAtMap[prescription.appointmentId] = prescription.createdAt;
+      }
+      prescriptionToAppointmentMap[prescription.prescriptionId] = prescription.appointmentId;
+    });
+
+    // ✅ Fetch address details in bulk for all appointments
+    const allAddressIds = [...new Set(appointments.map(appt => appt.addressId).filter(Boolean))];
+    const addressDetailsMap = {};
+    if (allAddressIds.length) {
+      const addressDocs = await UserAddress.find({ addressId: { $in: allAddressIds } }).lean();
+      addressDocs.forEach(addr => {
+        addressDetailsMap[addr.addressId] = addr;
+      });
+    }
+
+    // Build patient data
+    const patientDetails = await Promise.all(
+      patients.map(async (patient) => {
+        const patientId = patient.userId;
+
+        // Fetch tests
+        const tests = await PatientTest.find({
+          patientId,
+          doctorId,
+          isDeleted: false,
+        })
+          .populate({
+            path: "testInventoryId",
+            model: TestInventory,
+            select: "testName testPrice",
+          })
+          .select("testName status createdAt testInventoryId labTestID _id prescriptionId");
+
+        // Fetch medicines
+        const medicines = await Medicine.find({
+          patientId,
+          doctorId,
+          isDeleted: false,
+        })
+          .populate({
+            path: "medInventoryId",
+            model: MedInventory,
+            select: "medName price gst cgst",
+          })
+          .select("medName quantity status createdAt medInventoryId pharmacyMedID _id prescriptionId");
+
+        const patientAppointments = appointments.filter((appt) => appt.userId === patientId);
+
+        // Fetch payments
+        let payments = [];
+        try {
+          const paymentResponse = await axios.get(
+            `${process.env.FINANCE_SERVICE_URL}/finance/getPaymentsByDoctorAndUser/${doctorId}`,
+            {
+              headers: {
+                Authorization: req.headers.authorization,
+              },
+            }
+          );
+          payments = paymentResponse.data.data || [];
+        } catch (error) {
+          console.error(`Error fetching payments for patient ${patientId}:`, error.message);
+        }
+
+        // Build appointment-level data
+        const appointmentPatientEntries = patientAppointments.map((appointment) => {
+          const appointmentId = appointment.appointmentId;
+
+          const appointmentTests = tests.filter((test) =>
+            prescriptionToAppointmentMap[test.prescriptionId] === appointmentId
+          ).map((test) => ({
+            testId: test._id,
+            labTestID: test.labTestID,
+            testName: test.testName,
+            status: test.status,
+            price: test.testInventoryId?.testPrice ?? null,
+            createdAt: test.createdAt,
+          }));
+
+          const appointmentMedicines = medicines.filter((medicine) =>
+            prescriptionToAppointmentMap[medicine.prescriptionId] === appointmentId
+          ).map((medicine) => ({
+            medicineId: medicine._id,
+            pharmacyMedID: medicine.pharmacyMedID,
+            medName: medicine.medName,
+            quantity: medicine.quantity,
+            gst: medicine?.medInventoryId?.gst || 6,
+            cgst: medicine?.medInventoryId?.cgst || 6,
+            status: medicine.status,
+            price: medicine.medInventoryId?.price ?? null,
+            createdAt: medicine.createdAt,
+          }));
+
+          const payment = payments.find((p) => p.appointmentId === appointmentId);
+
+          const prescriptionCreatedAt = appointmentToPrescriptionCreatedAtMap[appointmentId] || appointment.createdAt;
+
+          // ✅ Get pharmacy & lab details
+          const addressInfo = addressDetailsMap[appointment.addressId] || {};
+          const pharmacyData = addressInfo.pharmacyName
+            ? {
+                pharmacyName: addressInfo.pharmacyName,
+                pharmacyRegistrationNo: addressInfo.pharmacyRegistrationNo,
+                pharmacyGst: addressInfo.pharmacyGst,
+                pharmacyPan: addressInfo.pharmacyPan,
+                pharmacyAddress: addressInfo.pharmacyAddress,
+              }
+            : null;
+
+          const labData = addressInfo.labName
+            ? {
+                labName: addressInfo.labName,
+                labRegistrationNo: addressInfo.labRegistrationNo,
+                labGst: addressInfo.labGst,
+                labPan: addressInfo.labPan,
+                labAddress: addressInfo.labAddress,
+              }
+            : null;
+
+          return {
+            patientId: patient.userId,
+            firstname: patient.firstname,
+            lastname: patient.lastname,
+            mobile: patient.mobile,
+            email: patient.email,
+            DOB: patient.DOB,
+            age: patient.age,
+            gender: patient.gender,
+            bloodgroup: patient.bloodgroup,
+            prescriptionCreatedAt,
+            appointments: [
+              {
+                appointmentId: appointment._id,
+                appointmentRefId: appointment.appointmentId,
+                appointmentType: appointment.appointmentType,
+                appointmentDate: appointment.appointmentDate,
+                appointmentTime: appointment.appointmentTime,
+                appointmentStatus: appointment.appointmentStatus,
+                createdAt: appointment.createdAt,
+                addressId: appointment.addressId,
+                tests: appointmentTests,
+                medicines: appointmentMedicines,
+                pharmacyData, // ✅ Added
+                labData,      // ✅ Added
+                feeDetails: payment
+                  ? {
+                      actualAmount: payment.actualAmount,
+                      discount: payment.discount,
+                      discountType: payment.discountType,
+                      finalAmount: payment.finalAmount,
+                      paymentStatus: payment.paymentStatus,
+                      paidAt: payment.paidAt,
+                    }
+                  : null,
+              },
+            ],
+            tests: appointmentTests,
+            medicines: appointmentMedicines,
+            pharmacyData, // ✅ Also added at patient level
+            labData,
+          };
+        });
+
+        return appointmentPatientEntries;
+      })
+    );
+
+    // Flatten & filter
+    const flattenedPatientDetails = patientDetails.flat();
+    flattenedPatientDetails.sort((a, b) => new Date(b.prescriptionCreatedAt) - new Date(a.prescriptionCreatedAt));
+
+    const filteredPatientDetails = flattenedPatientDetails.filter(
+      (patient) => patient.tests.length > 0 || patient.medicines.length > 0
+    );
+
+    const paginatedPatients = filteredPatientDetails.slice(skip, skip + limit);
+    console.log("Patients after filtering:", filteredPatientDetails.length);
+
+    return res.status(200).json({
+      success: true,
+      data: paginatedPatients,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(filteredPatientDetails.length / limit),
+        totalPatients: filteredPatientDetails.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching doctor patients:", error);
+    return res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+};
+
+exports.fetchMyDoctorPatients = async (req, res) => {
+  try {
+    const doctorId = req.params.doctorId || req.headers.userid;
+    console.log("doctorId", doctorId);
+
+    if (!doctorId) {
+      return res.status(400).json({ error: "Invalid Doctor ID" });
+    }
+
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Collect patientIds from test and medicine data
+    const testPatientIds = await PatientTest.find({
+      doctorId,
+      isDeleted: false,
+    }).distinct("patientId");
+
+    const medicinePatientIds = await Medicine.find({
+      doctorId,
+      isDeleted: false,
+    }).distinct("patientId");
+
+    // Appointments
+    let appointments = [];
+    try {
+      const appointmentResponse = await axios.get(
+        `${process.env.APPOINTMENTS_SERVICE_URL}/appointment/getAppointmentsByDoctor/${doctorId}`,
+        {
+          headers: {
+            Authorization: req.headers.authorization,
+          },
+        }
+      );
+      appointments = appointmentResponse.data.data || [];
+    } catch (err) {
+      console.error("Error fetching appointments:", err.message);
+    }
+
+    const appointmentPatientIds = appointments.map((appt) => appt.userId);
+
+    // Merge and deduplicate all patientIds
+    const patientIds = [...new Set([...testPatientIds, ...medicinePatientIds, ...appointmentPatientIds])];
+
+    console.log("Total unique patientIds:", patientIds.length, patientIds);
+
+    if (!patientIds.length) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: {
+          page,
+          limit,
+          totalPages: 0,
+          totalPatients: 0,
+        },
+      });
+    }
+
+    // Fetch patient details
+    const patients = await User.find({
+      role: "patient",
+      userId: { $in: patientIds },
+      isDeleted: false,
+    }).select("firstname lastname email userId DOB gender bloodgroup mobile age");
+
+    console.log("Patients fetched from database:", patients.length);
+    if (!patients.length) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: {
+          page,
+          limit,
+          totalPages: 0,
+          totalPatients: 0,
+        },
+      });
+    }
+
+    // Fetch prescriptions to map prescriptionId to appointmentId and get createdAt
+    const prescriptions = await ePrescriptionModel.find({
+      doctorId,
+      userId: { $in: patientIds },
+    }).select("prescriptionId appointmentId createdAt");
+
+    // Create a map of appointmentId to latest prescription createdAt
+    const appointmentToPrescriptionCreatedAtMap = {};
+    prescriptions.forEach((prescription) => {
+      const existing = appointmentToPrescriptionCreatedAtMap[prescription.appointmentId];
+      if (!existing || new Date(prescription.createdAt) > new Date(existing)) {
+        appointmentToPrescriptionCreatedAtMap[prescription.appointmentId] = prescription.createdAt;
+      }
+    });
+
+    // Create a map of prescriptionId to appointmentId
+    const prescriptionToAppointmentMap = {};
+    prescriptions.forEach((prescription) => {
+      prescriptionToAppointmentMap[prescription.prescriptionId] = prescription.appointmentId;
+    });
+
+    // Fetch all addresses for the appointments
+    const addressIds = [...new Set(appointments.map((appt) => appt.addressId).filter(id => id))];
+    const addresses = await UserAddress.find({ addressId: { $in: addressIds } }).select(
+      "addressId pharmacyName pharmacyHeader labName labHeader pharmacyAddress labAddress pharmacyGst labGst pharmacyPan labPan pharmacyRegistrationNo labRegistrationNo"
+    );
+
+    // Create a map of addressId to address details with signed URLs
+    const addressMap = {};
+    for (const address of addresses) {
+      let pharmacyHeaderUrl = null;
+      let labHeaderUrl = null;
+
+      // Generate signed URL for pharmacyHeader
+      if (address.pharmacyHeader) {
+        try {
+          pharmacyHeaderUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: address.pharmacyHeader,
+            }),
+            { expiresIn: 3600 } // URL expires in 1 hour
+          );
+        } catch (error) {
+          console.error(`Error generating signed URL for pharmacyHeader ${address.pharmacyHeader}:`, error.message);
+        }
+      }
+
+      // Generate signed URL for labHeader
+      if (address.labHeader) {
+        try {
+          labHeaderUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: address.labHeader,
+            }),
+            { expiresIn: 3600 } // URL expires in 1 hour
+          );
+        } catch (error) {
+          console.error(`Error generating signed URL for labHeader ${address.labHeader}:`, error.message);
+        }
+      }
+
+      addressMap[address.addressId] = {
+        pharmacyName: address.pharmacyName,
+        pharmacyHeader: address.pharmacyHeader, // Raw S3 key
+        pharmacyHeaderUrl, // Signed URL
+        pharmacyAddress: address.pharmacyAddress,
+        pharmacyGst: address.pharmacyGst,
+        pharmacyPan: address.pharmacyPan,
+        pharmacyRegistrationNo: address.pharmacyRegistrationNo,
+        labName: address.labName,
+        labHeader: address.labHeader, // Raw S3 key
+        labHeaderUrl, // Signed URL
+        labAddress: address.labAddress,
+        labGst: address.labGst,
+        labPan: address.labPan,
+        labRegistrationNo: address.labRegistrationNo,
+      };
+    }
+
+    // Build patient data
+    const patientDetails = await Promise.all(
+      patients.map(async (patient) => {
+        const patientId = patient.userId;
+
+        // Fetch tests and group by prescriptionId
+        const tests = await PatientTest.find({
+          patientId,
+          doctorId,
+          isDeleted: false,
+        })
+          .populate({
+            path: "testInventoryId",
+            model: TestInventory,
+            select: "testName testPrice",
+          })
+          .select("testName status createdAt testInventoryId labTestID _id prescriptionId");
+
+        // Fetch medicines and group by prescriptionId
+        const medicines = await Medicine.find({
+          patientId,
+          doctorId,
+          isDeleted: false,
+        })
+          .populate({
+            path: "medInventoryId",
+            model: MedInventory,
+            select: "medName price gst cgst",
+          })
+          .select("medName quantity status createdAt medInventoryId pharmacyMedID _id prescriptionId");
+
+        // Filter appointments for this patient
+        const patientAppointments = appointments.filter((appt) => appt.userId === patientId);
+
+        // Fetch payments
+        let payments = [];
+        try {
+          const paymentResponse = await axios.get(
+            `${process.env.FINANCE_SERVICE_URL}/finance/getPaymentsByDoctorAndUser/${doctorId}`,
+            {
+              headers: {
+                Authorization: req.headers.authorization,
+              },
+            }
+          );
+          payments = paymentResponse.data.data || [];
+        } catch (error) {
+          console.error(`Error fetching payments for patient ${patientId}:`, error.message);
+        }
+
+        // Create a patient entry for each appointment
+        const appointmentPatientEntries = patientAppointments.map((appointment) => {
+          const appointmentId = appointment.appointmentId;
+
+          // Find tests for this appointment via prescriptionId
+          const appointmentTests = tests.filter((test) => {
+            const testPrescriptionId = test.prescriptionId;
+            return prescriptionToAppointmentMap[testPrescriptionId] === appointmentId;
+          }).map((test) => ({
+            testId: test._id,
+            labTestID: test.labTestID,
+            testName: test.testName,
+            status: test.status,
+            price: test.testInventoryId?.testPrice ?? null,
+            createdAt: test.createdAt,
+            // Attach lab data from address
+            labDetails: addressMap[appointment.addressId]
+              ? {
+                  labName: addressMap[appointment.addressId].labName,
+                  labHeader: addressMap[appointment.addressId].labHeader, // Raw S3 key
+                  labHeaderUrl: addressMap[appointment.addressId].labHeaderUrl, // Signed URL
+                  labAddress: addressMap[appointment.addressId].labAddress,
+                  labGst: addressMap[appointment.addressId].labGst,
+                  labPan: addressMap[appointment.addressId].labPan,
+                  labRegistrationNo: addressMap[appointment.addressId].labRegistrationNo,
+                }
+              : null,
+          }));
+
+          // Find medicines for this appointment via prescriptionId
+          const appointmentMedicines = medicines.filter((medicine) => {
+            const medicinePrescriptionId = medicine.prescriptionId;
+            return prescriptionToAppointmentMap[medicinePrescriptionId] === appointmentId;
+          }).map((medicine) => ({
+            medicineId: medicine._id,
+            pharmacyMedID: medicine.pharmacyMedID,
+            medName: medicine.medName,
+            quantity: medicine.quantity,
+            gst: medicine?.medInventoryId?.gst || 6,
+            cgst: medicine?.medInventoryId?.cgst || 6,
+            status: medicine.status,
+            price: medicine.medInventoryId?.price ?? null,
+            createdAt: medicine.createdAt,
+            // Attach pharmacy data from address
+            pharmacyDetails: addressMap[appointment.addressId]
+              ? {
+                  pharmacyName: addressMap[appointment.addressId].pharmacyName,
+                  pharmacyHeader: addressMap[appointment.addressId].pharmacyHeader, // Raw S3 key
+                  pharmacyHeaderUrl: addressMap[appointment.addressId].pharmacyHeaderUrl, // Signed URL
+                  pharmacyAddress: addressMap[appointment.addressId].pharmacyAddress,
+                  pharmacyGst: addressMap[appointment.addressId].pharmacyGst,
+                  pharmacyPan: addressMap[appointment.addressId].pharmacyPan,
+                  pharmacyRegistrationNo: addressMap[appointment.addressId].pharmacyRegistrationNo,
+                }
+              : null,
+          }));
+
+          // Find payment for this appointment
+          const payment = payments.find((p) => p.appointmentId === appointmentId);
+
+          // Get prescription createdAt for sorting
+          const prescriptionCreatedAt = appointmentToPrescriptionCreatedAtMap[appointmentId] || appointment.createdAt;
+
+          // Create patient entry for this appointment
+          return {
+            patientId: patient.userId,
+            firstname: patient.firstname,
+            lastname: patient.lastname,
+            mobile: patient.mobile,
+            email: patient.email,
+            DOB: patient.DOB,
+            age: patient.age,
+            gender: patient.gender,
+            bloodgroup: patient.bloodgroup,
+            prescriptionCreatedAt: prescriptionCreatedAt, // For sorting
+            appointments: [
+              {
+                appointmentId: appointment._id,
+                appointmentRefId: appointment.appointmentId,
+                appointmentType: appointment.appointmentType,
+                appointmentDate: appointment.appointmentDate,
+                appointmentTime: appointment.appointmentTime,
+                appointmentStatus: appointment.appointmentStatus,
+                createdAt: appointment.createdAt,
+                addressId: appointment.addressId,
+                tests: appointmentTests,
+                medicines: appointmentMedicines,
+                feeDetails: payment
+                  ? {
+                      actualAmount: payment.actualAmount,
+                      discount: payment.discount,
+                      discountType: payment.discountType,
+                      finalAmount: payment.finalAmount,
+                      paymentStatus: payment.paymentStatus,
+                      paidAt: payment.paidAt,
+                    }
+                  : null,
+              },
+            ],
+            tests: appointmentTests, // For compatibility with frontend
+            medicines: appointmentMedicines, // For compatibility with frontend
+          };
+        });
+
+        return appointmentPatientEntries;
+      })
+    );
+
+    // Flatten the array of patient entries
+    const flattenedPatientDetails = patientDetails.flat();
+
+    // Sort by prescription createdAt in descending order (newest first)
+    flattenedPatientDetails.sort((a, b) => {
+      const dateA = new Date(a.prescriptionCreatedAt);
+      const dateB = new Date(b.prescriptionCreatedAt);
+      return dateB - dateA; // Descending order
+    });
+
+    // Option 1: Exclude appointments with no tests or medicines (current behavior)
+    const filteredPatientDetails = flattenedPatientDetails.filter(
+      (patient) => patient.tests.length > 0 || patient.medicines.length > 0
+    );
+
+    // Option 2: Include all appointments (uncomment to enable)
+    // const filteredPatientDetails = flattenedPatientDetails;
+
+    const paginatedPatients = filteredPatientDetails.slice(skip, skip + limit);
+    console.log("Patients after filtering:", filteredPatientDetails.length);
+
+    return res.status(200).json({
+      success: true,
+      data: paginatedPatients,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(filteredPatientDetails.length / limit),
+        totalPatients: filteredPatientDetails.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching doctor patients:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Internal Server Error",
+    });
+  }
+};
+
 
 exports.totalBillPayFromReception = async (req, res) => {
   try {
