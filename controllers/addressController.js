@@ -455,11 +455,11 @@ if (req.files) {
 };
 
 
-
+//add pharmacy to existing clinic
 exports.addPharmacyToClinic = async (req, res) => {
   try {
     const { userId, addressId, pharmacyName, pharmacyRegistrationNo, pharmacyGst, pharmacyPan, pharmacyAddress } = req.body;
-
+ const bypassCheck = req.query.bypassCheck;
     // Step 1: Check if clinic exists
     const clinic = await UserAddress.findOne({ userId, addressId, type: { $in: ['Clinic', 'Hospital'] } });
     if (!clinic) {
@@ -469,6 +469,33 @@ exports.addPharmacyToClinic = async (req, res) => {
       });
     }
 
+
+     /** ─────────────── Pharmacy duplication check ─────────────── **/
+    if (pharmacyRegistrationNo && !bypassCheck) {
+      const existingPharmacy = await UserAddress.findOne({
+        pharmacyRegistrationNo,
+        pharmacyId: { $ne: null },
+        userId: { $ne: userId }
+      });
+
+      if (existingPharmacy) {
+        const existingMapping = await pharmacyMapping.findOne({
+          pharmacyId: existingPharmacy.pharmacyId,
+          doctorId: userId
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This pharmacy is already registered with another doctor. Do you want to link it?',
+            data: {
+              pharmacyId: existingPharmacy.pharmacyId,
+              existingDoctorId: existingPharmacy.userId
+            }
+          });
+        }
+      }
+    }
     // Step 2: Optional pharmacy header upload
     let pharmacyHeader = null;
     if (req.file) {
@@ -509,6 +536,127 @@ exports.addPharmacyToClinic = async (req, res) => {
     return res.status(200).json({
       status: 'success',
       message: 'Pharmacy added/updated successfully for clinic',
+      data: clinic
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+
+//add lab to existing clinic
+exports.addLabToClinic = async (req, res) => {
+  try {
+    const {
+      userId,
+      addressId,
+      labName,
+      labRegistrationNo,
+      labGst,
+      labPan,
+      labAddress
+    } = req.body;
+
+
+const bypassCheck = req.query.bypassCheck || false; // confirmation flag from FE
+
+    console.log("Incoming lab data:", req.body);
+
+    // ─────────────── Lab duplication check ───────────────
+    if (labRegistrationNo && !bypassCheck) {
+      const existingLab = await UserAddress.findOne({
+        labRegistrationNo,
+        labId: { $ne: null },
+        userId: { $ne: userId }
+      });
+
+      if (existingLab) {
+        const existingMapping = await labMapping.findOne({
+          labId: existingLab.labId,
+          doctorId: userId
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This lab is already registered with another doctor. Do you want to link it?',
+            data: {
+              labId: existingLab.labId,
+              existingDoctorId: existingLab.userId
+            }
+          });
+        }
+      }
+    }
+
+    // 1. Check if clinic exists
+    const clinic = await UserAddress.findOne({ userId, addressId, type: { $in: ['Clinic', 'Hospital'] } });
+console.log("clinic=====", clinic)
+
+    if (!clinic) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Clinic not found for this user'
+      });
+    }
+
+    // 2. Optional lab header image upload
+    let labHeader = null;
+    if (req.file) {
+      const fileName = `lab-header-${Date.now()}`;
+      await s3Client.send(new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Body: req.file.buffer,
+        Key: fileName,
+        ContentType: req.file.mimetype
+      }));
+      labHeader = fileName;
+    }
+
+    // 3. Generate labId if not already present
+    let labId = clinic.labId;
+    if (!labId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.LAB_SEQUENCE.LAB_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    // 4. Update clinic record with lab details
+    clinic.labName = labName;
+    clinic.labRegistrationNo = labRegistrationNo;
+    clinic.labGst = labGst;
+    clinic.labPan = labPan;
+    clinic.labAddress = labAddress;
+    clinic.labHeader = labHeader || clinic.labHeader;
+    clinic.labId = labId;
+    clinic.updatedBy = userId;
+    clinic.updatedAt = new Date();
+
+    await clinic.save();
+
+    // 5. Create or update LabMapping
+    await labMapping.findOneAndUpdate(
+      { doctorId: userId, clinicId: addressId },
+      {
+        doctorId: userId,
+        clinicId: addressId,
+        labId,
+        status: 'Active',
+        updatedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Lab added/updated successfully for clinic',
       data: clinic
     });
 

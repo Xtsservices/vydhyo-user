@@ -22,11 +22,12 @@ const {
     getUserIds,
    
 } = require('../controllers/usersController');
-const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic } = require('../controllers/addressController');
+const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic, addLabToClinic } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
 // Configure multer for file handling
 const upload = multer({ dest: 'uploads/' }); // files go to ./uploads temporarily
+
 
 const upload2 = multer({ storage: multer.memoryStorage() });
 // Routes for user management
@@ -59,7 +60,10 @@ router.post(
   addAddressFromWeb
 );
 
-router.post('/addPharmacyToClinic', upload.single('pharmacyHeader'), addPharmacyToClinic);
+router.post('/addPharmacyToClinic', upload2.single('pharmacyHeader'), addPharmacyToClinic);
+
+
+router.post('/addLabToClinic', upload2.single('labHeader'), addLabToClinic);
 
 
 router.put('/updateAddress', updateAddress);
