@@ -456,6 +456,71 @@ if (req.files) {
 
 
 
+exports.addPharmacyToClinic = async (req, res) => {
+  try {
+    const { userId, addressId, pharmacyName, pharmacyRegistrationNo, pharmacyGst, pharmacyPan, pharmacyAddress } = req.body;
+
+    // Step 1: Check if clinic exists
+    const clinic = await UserAddress.findOne({ userId, addressId, type: { $in: ['Clinic', 'Hospital'] } });
+    if (!clinic) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Clinic not found for this user'
+      });
+    }
+
+    // Step 2: Optional pharmacy header upload
+    let pharmacyHeader = null;
+    if (req.file) {
+      const fileName = `pharmacy-header-${Date.now()}`;
+      await s3Client.send(new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Body: req.file.buffer,
+        Key: fileName,
+        ContentType: req.file.mimetype
+      }));
+      pharmacyHeader = fileName;
+    }
+
+    // Step 3: Generate pharmacyId if missing
+    let pharmacyId = clinic.pharmacyId;
+    if (!pharmacyId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.PHARMACY_SEQUENCE.PHARMACY_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      pharmacyId = sequenceConstant.PHARMACY_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    // Step 4: Update clinic record with pharmacy details
+    clinic.pharmacyName = pharmacyName;
+    clinic.pharmacyRegistrationNo = pharmacyRegistrationNo;
+    clinic.pharmacyGst = pharmacyGst;
+    clinic.pharmacyPan = pharmacyPan;
+    clinic.pharmacyAddress = pharmacyAddress;
+    clinic.pharmacyHeader = pharmacyHeader || clinic.pharmacyHeader;
+    clinic.pharmacyId = pharmacyId;
+    clinic.updatedBy = userId;
+    clinic.updatedAt = new Date();
+
+    await clinic.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Pharmacy added/updated successfully for clinic',
+      data: clinic
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+
 // New endpoint to confirm linking existing pharmacy/lab
 exports.confirmLinkExisting = async (req, res) => {
   try {
