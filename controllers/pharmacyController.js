@@ -324,7 +324,7 @@ exports.addattach = async (req, res) => {
 
 
     // Clean up the temporary file
-    // await unlink(req.file.path);
+    await unlink(req.file.path);
     fileDeleted = true; // Mark file as deleted
 
     // Update prescription in database
@@ -1383,7 +1383,7 @@ exports.getAllPharmacyPatientsByDoctorID2 = async (req, res) => {
   }
 };
 
-exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
+exports.getAllPharmacyPatientsByDoctorID2 = async (req, res) => {
   try {
     const doctorId = req.query.doctorId || req.headers.userid;
     const { searchText, status, page = 1, limit = 5 } = req.query;
@@ -1646,6 +1646,261 @@ console.log("Pharmacy header from DB:", address);
       message: error.message || "Internal server error",
     });
   }
+};
+
+exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
+  try {
+    const doctorId = req.query.doctorId || req.headers.userid;
+    const { searchText, status, page = 1, limit = 5 } = req.query;
+
+    // Validate doctorId
+    if (!doctorId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Doctor ID is required",
+      });
+    }
+
+    // Validate pagination parameters
+    const pageNum = Number.parseInt(page, 10);
+    const limitNum = Number.parseInt(limit, 10);
+    if (!Number.isFinite(pageNum) || pageNum < 1 || !Number.isFinite(limitNum) || limitNum < 1) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Invalid page or limit parameters",
+      });
+    }
+
+    const skip = (pageNum - 1) * limitNum;
+
+    // Default status behavior
+    const effectiveStatus = (typeof status === "string") ? status : "pending";
+
+    // Build match conditions (pre-lookup)
+    const matchConditions = { doctorId, isDeleted: false };
+    if (searchText) {
+      matchConditions.$or = [
+        { patientId: { $regex: searchText, $options: "i" } }, // name search handled post-lookup
+      ];
+    }
+
+    // Build the status condition for $filter dynamically
+    let statusCond;
+    if (effectiveStatus === "pending") {
+      statusCond = { $eq: ["$$medicine.status", "pending"] };
+    } else if (effectiveStatus === "non-pending") {
+      statusCond = { $ne: ["$$medicine.status", "pending"] };
+    } else {
+      // exact status match, e.g., "completed", "cancelled"
+      statusCond = { $eq: ["$$medicine.status", effectiveStatus] };
+    }
+
+    const pipeline = [
+      { $match: matchConditions },
+
+      {
+        $lookup: {
+          from: "medinventories",
+          localField: "medInventoryId",
+          foreignField: "_id",
+          as: "inventoryData",
+        },
+      },
+      { $unwind: { path: "$inventoryData", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "users",
+          localField: "patientId",
+          foreignField: "userId",
+          as: "userData",
+        },
+      },
+      { $unwind: { path: "$userData", preserveNullAndEmptyArrays: true } },
+
+      // Name search after we have userData
+      ...(searchText
+        ? [
+            {
+              $match: {
+                $or: [
+                  { patientId: { $regex: searchText, $options: "i" } },
+                  {
+                    $expr: {
+                      $regexMatch: {
+                        input: {
+                          $trim: {
+                            input: {
+                              $concat: [
+                                { $ifNull: ["$userData.firstname", ""] },
+                                " ",
+                                { $ifNull: ["$userData.lastname", ""] },
+                              ],
+                            },
+                          },
+                        },
+                        regex: searchText,
+                        options: "i",
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ]
+        : []),
+
+      {
+        $group: {
+          _id: "$patientId",
+          patientName: {
+            $first: {
+              $trim: {
+                input: {
+                  $concat: [
+                    { $ifNull: ["$userData.firstname", ""] },
+                    " ",
+                    { $ifNull: ["$userData.lastname", ""] },
+                  ],
+                },
+              },
+            },
+          },
+          doctorId: { $first: "$doctorId" },
+          latestCreatedAt: { $max: "$createdAt" },
+          medicines: {
+            $push: {
+              _id: "$_id",
+              medName: "$medName",
+              price: { $ifNull: ["$inventoryData.price", null] },
+              quantity: "$quantity",
+              status: "$status",
+              gst: { $ifNull: ["$inventoryData.gst", 6] },
+              cgst: { $ifNull: ["$inventoryData.cgst", 6] },
+              createdAt: "$createdAt",
+              pharmacyMedID: "$pharmacyMedID",
+            },
+          },
+        },
+      },
+
+      // IMPORTANT: sort BEFORE projecting away latestCreatedAt
+      { $sort: { latestCreatedAt: -1 } },
+
+      // Filter medicines by effective status
+      {
+        $project: {
+          patientId: "$_id",
+          patientName: 1,
+          doctorId: 1,
+          // keep latestCreatedAt if you want to show it to client; otherwise omit it
+          // latestCreatedAt: 1,
+          medicines: {
+            $filter: {
+              input: "$medicines",
+              as: "medicine",
+              cond: statusCond,
+            },
+          },
+          _id: 0,
+        },
+      },
+
+      // Drop patients that have no medicines after filtering
+      { $match: { medicines: { $ne: [] } } },
+
+      {
+        $facet: {
+          paginatedResults: [{ $skip: skip }, { $limit: limitNum }],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ];
+
+    const [result = { paginatedResults: [], totalCount: [] }] = await medicineModel.aggregate(pipeline);
+
+    const patients = result.paginatedResults || [];
+    const totalPatients = result.totalCount?.[0]?.count || 0;
+    const totalPages = Math.ceil(totalPatients / limitNum);
+
+    // Enrich with appointment + pharmacy header
+    for (const patient of patients) {
+      try {
+        const resp = await axios.get(
+          "http://localhost:4005/appointment/getAppointmentDataByUserIdAndDoctorId",
+          {
+            params: { doctorId: patient.doctorId, userId: patient.patientId },
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        const addressId = resp.data?.data?.addressId || null;
+        patient.addressId = addressId;
+
+        if (addressId) {
+          const address = await UserAddress.findOne({ addressId }).lean();
+          if (address && address.pharmacyName) {
+            let pharmacyHeaderUrl = null;
+
+            if (address.pharmacyHeader) {
+              try {
+                pharmacyHeaderUrl = await getSignedUrl(
+                  s3Client,
+                  new GetObjectCommand({
+                    Bucket: process.env.AWS_BUCKET_NAME,
+                    Key: address.pharmacyHeader,
+                  }),
+                  { expiresIn: 300 }
+                );
+              } catch (s3Err) {
+                console.error("Error fetching S3 signed URL:", s3Err.message);
+              }
+            }
+
+            patient.pharmacyData = {
+              pharmacyName: address.pharmacyName,
+              pharmacyRegistrationNo: address.pharmacyRegistrationNo,
+              pharmacyGst: address.pharmacyGst,
+              pharmacyPan: address.pharmacyPan,
+              pharmacyAddress: address.pharmacyAddress,
+              pharmacyId: address.pharmacyId,
+              pharmacyHeaderUrl,
+            };
+          } else {
+            patient.pharmacyData = null;
+          }
+        } else {
+          patient.pharmacyData = null;
+        }
+      } catch (err) {
+        console.error(`Error fetching appointment or address for ${patient.patientId}`, err.message);
+        patient.addressId = null;
+        patient.pharmacyData = null;
+      }
+    }
+
+    console.log("Patients retrieved:", patients, "Total:", totalPatients);
+
+    return res.status(200).json({
+      status: "success",
+      message: "Pharmacy patients retrieved successfully",
+      data: {
+        patients,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalPatients,
+          totalPages,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error in getAllPharmacyPatientsByDoctorID:", error);
+    return res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error",
+    });
+  }
 };
 
 exports.pharmacyPayment = async (req, res) => {

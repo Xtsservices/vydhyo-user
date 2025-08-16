@@ -352,7 +352,7 @@ const getAllTestsByDoctorId = async (req, res) => {
   }
 };
 
-const getAllTestsPatientsByDoctorID = async (req, res) => {
+const getAllTestsPatientsByDoctorID2 = async (req, res) => {
   try {
     const doctorId = req.params.doctorId || req.headers.userid;
      const { searchValue, status, page = 1, limit = 5 } = req.query;
@@ -600,6 +600,241 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       message: error.message,
     });
   }
+};
+
+const getAllTestsPatientsByDoctorID = async (req, res) => {
+  try {
+    const doctorId = req.params.doctorId || req.headers.userid;
+    const { searchValue, status, page = 1, limit = 5 } = req.query;
+
+    // Validate doctorId
+    if (!doctorId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Doctor ID is required",
+      });
+    }
+
+    // Validate pagination inputs
+    const pageNum = Number.parseInt(page, 10);
+    const limitNum = Number.parseInt(limit, 10);
+    if (!Number.isFinite(pageNum) || !Number.isFinite(limitNum) || pageNum < 1 || limitNum < 1) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Page and limit must be positive integers",
+      });
+    }
+
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build match conditions
+    const matchConditions = { doctorId };
+
+    if (searchValue) {
+      matchConditions.patientId = { $regex: searchValue, $options: "i" }; // Case-insensitive search
+    }
+
+    // Status filter: default to "pending" if not provided
+    if (typeof status === "string") {
+      if (status === "pending") {
+        matchConditions.status = "pending";
+      } else if (status === "non-pending") {
+        matchConditions.status = { $ne: "pending" };
+      } else {
+        // Allow exact status match like "completed", "cancelled", etc.
+        matchConditions.status = status;
+      }
+    } else {
+      matchConditions.status = "pending"; // default
+    }
+
+    // Build aggregation pipeline
+    const pipeline = [
+      { $match: matchConditions },
+
+      {
+        $lookup: {
+          from: "testinventories",
+          let: {
+            testInventoryId: "$testInventoryId",
+            testName: "$testName",
+            doctorId: "$doctorId",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$_id", "$$testInventoryId"] },
+                    {
+                      $and: [
+                        { $eq: ["$testName", "$$testName"] },
+                        { $eq: ["$doctorId", "$$doctorId"] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            { $project: { _id: 1, testPrice: 1 } },
+          ],
+          as: "testData",
+        },
+      },
+
+      { $unwind: { path: "$testData", preserveNullAndEmptyArrays: true } },
+
+      {
+        $lookup: {
+          from: "users",
+          localField: "patientId",
+          foreignField: "userId",
+          as: "userData",
+        },
+      },
+      { $unwind: { path: "$userData", preserveNullAndEmptyArrays: true } },
+
+      {
+        $group: {
+          _id: "$patientId",
+          patientName: {
+            $first: {
+              $concat: [
+                { $ifNull: ["$userData.firstname", ""] },
+                " ",
+                { $ifNull: ["$userData.lastname", ""] },
+              ],
+            },
+          },
+          doctorId: { $first: "$doctorId" },
+          latestCreatedAt: { $max: "$createdAt" }, // used for sorting
+          tests: {
+            $push: {
+              _id: "$_id",
+              testName: "$testName",
+              price: { $ifNull: ["$testData.testPrice", null] },
+              status: "$status",
+              createdAt: "$createdAt",
+              labTestID: "$labTestID",
+            },
+          },
+        },
+      },
+
+      // Sort BEFORE projecting away latestCreatedAt
+      { $sort: { latestCreatedAt: -1 } },
+
+      // Final shape (keep latestCreatedAt if you want it on the client)
+      {
+        $project: {
+          patientId: "$_id",
+          patientName: 1,
+          doctorId: 1,
+          tests: 1,
+          _id: 0,
+          // latestCreatedAt: 1, // <- uncomment if you want to return it
+        },
+      },
+
+      {
+        $facet: {
+          paginatedResults: [{ $skip: skip }, { $limit: limitNum }],
+          totalCount: [{ $count: "count" }],
+        },
+      },
+    ];
+
+    // Aggregate tests by patientId for the given doctorId
+    const [agg = { paginatedResults: [], totalCount: [] }] = await patientTestModel.aggregate(pipeline);
+    const patients = agg.paginatedResults || [];
+    const totalPatients = agg.totalCount?.[0]?.count || 0;
+    const totalPages = Math.ceil(totalPatients / limitNum);
+
+    // Step 2: Fetch addressId from Appointment Service and enrich with lab data
+    for (const patient of patients) {
+      try {
+        const resp = await axios.get(
+          "http://localhost:4005/appointment/getAppointmentDataByUserIdAndDoctorId",
+          {
+            params: {
+              doctorId: patient.doctorId,
+              userId: patient.patientId,
+            },
+            headers: {
+              "Content-Type": "application/json",
+              // 'Authorization': Bearer ${req.headers.authorization} // if needed
+            },
+          }
+        );
+
+        const addressId = resp.data?.data?.addressId || null;
+        patient.addressId = addressId;
+
+        if (addressId) {
+          const address = await UserAddress.findOne({ addressId }).lean();
+          if (address && address.labName) {
+            let labHeaderUrl = null;
+
+            if (address.labHeader) {
+              try {
+                labHeaderUrl = await getSignedUrl(
+                  s3Client,
+                  new GetObjectCommand({
+                    Bucket: process.env.AWS_BUCKET_NAME,
+                    Key: address.labHeader,
+                  }),
+                  { expiresIn: 300 }
+                );
+              } catch (s3Err) {
+                console.error("Error fetching S3 signed URL:", s3Err.message);
+              }
+            }
+
+            patient.labData = {
+              labName: address.labName,
+              labRegistrationNo: address.labRegistrationNo,
+              labGst: address.labGst,
+              labPan: address.labPan,
+              labAddress: address.labAddress,
+              labId: address.labId,
+              labHeaderUrl,
+            };
+          } else {
+            patient.labData = null;
+          }
+        } else {
+          patient.labData = null;
+        }
+      } catch (err) {
+        console.error(
+          Error `fetching appointment or address for ${patient.patientId}:`,
+          err.message
+        );
+        patient.addressId = null;
+        patient.labData = null;
+      }
+    }
+
+    console.log("Patients with lab data:", patients);
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        patients,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          totalPatients,
+          totalPages,
+        },
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
 };
 
 const updatePatientTestPrice = async (req, res) => {

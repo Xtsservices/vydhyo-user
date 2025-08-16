@@ -353,6 +353,31 @@ exports.addAddressFromWeb = async (req, res) => {
     /** ─────────────── File Upload (optional) ─────────────── **/
    /** ─────────────── File Upload (optional) ─────────────── **/
 if (req.files) {
+
+  // Clinic Header (file)
+      if (req.files['file'] && req.files['file'][0]) {
+        const headerPhoto = generateFileName();
+        await s3Client.send(new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['file'][0].buffer,
+          Key: headerPhoto,
+          ContentType: req.files['file'][0].mimetype,
+        }));
+        req.body.headerImage = headerPhoto;
+      }
+
+      // Digital Signature (signature)
+      if (req.files['signature'] && req.files['signature'][0]) {
+        const signaturePhoto = generateFileName();
+        await s3Client.send(new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['signature'][0].buffer,
+          Key: signaturePhoto,
+          ContentType: req.files['signature'][0].mimetype,
+        }));
+        req.body.digitalSignature = signaturePhoto;
+      }
+      
   // Pharmacy Header
   if (req.files['pharmacyHeader'] && req.files['pharmacyHeader'][0]) {
     const pharmacyPhoto = generateFileName();

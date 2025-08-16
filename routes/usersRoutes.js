@@ -54,6 +54,8 @@ router.post('/addAddress', addAddress);
 router.post(
   '/addAddressFromWeb',
   upload2.fields([
+    { name: 'file', maxCount: 1 }, // Clinic header
+    { name: 'signature', maxCount: 1 }, // Digital signature
     { name: 'pharmacyHeader', maxCount: 1 },
     { name: 'labHeader', maxCount: 1 }
   ]),
