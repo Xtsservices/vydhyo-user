@@ -232,7 +232,7 @@ exports.getUserById = async (req, res) => {
               Bucket: process.env.AWS_BUCKET_NAME,
               Key: address.headerImage,
             }),
-            { expiresIn: 300 } // 5 minutes
+            { expiresIn: 3600 } // 5 minutes
           );
         } catch (s3Error) {
           console.error(`Failed to generate pre-signed URL for headerImage ${address.headerImage}:`, s3Error);
