@@ -548,6 +548,69 @@ exports.addPharmacyToClinic = async (req, res) => {
 };
 
 
+
+exports.getPharmacyByClinicId = async (req, res) => {
+  try {
+    const {addressId} = req.params
+    const userId = req.headers.userid || req.query.userId
+   
+
+    // Step 1: Find clinic with pharmacy
+    const clinic = await UserAddress.findOne({ userId, addressId, type: { $in: ['Clinic', 'Hospital'] } });
+    if (!clinic) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Clinic not found for this user'
+      });
+    }
+
+    // Step 2: If pharmacy not set
+    if (!clinic.pharmacyId) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No pharmacy found for this clinic'
+      });
+    }
+
+    // Step 3: Generate signed URL for pharmacyHeader if available
+    let pharmacyHeaderUrl = null;
+    if (clinic.pharmacyHeader) {
+      pharmacyHeaderUrl = await getSignedUrl(
+        s3Client,
+        new GetObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: clinic.pharmacyHeader
+        }),
+        { expiresIn: 300 } // 5 min expiry
+      );
+    }
+
+    // Step 4: Return pharmacy details
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        pharmacyId: clinic.pharmacyId,
+        pharmacyName: clinic.pharmacyName,
+        pharmacyRegistrationNo: clinic.pharmacyRegistrationNo,
+        pharmacyGst: clinic.pharmacyGst,
+        pharmacyPan: clinic.pharmacyPan,
+        pharmacyAddress: clinic.pharmacyAddress,
+        pharmacyHeader: pharmacyHeaderUrl, // signed URL (if exists)
+        updatedAt: clinic.updatedAt
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+
+
+
 //add lab to existing clinic
 exports.addLabToClinic = async (req, res) => {
   try {
