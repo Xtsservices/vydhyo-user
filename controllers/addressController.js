@@ -499,7 +499,7 @@ exports.addPharmacyToClinic = async (req, res) => {
     // Step 2: Optional pharmacy header upload
     let pharmacyHeader = null;
     if (req.file) {
-      const fileName = `pharmacy-header-${Date.now()}`;
+          const fileName = generateFileName();
       await s3Client.send(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Body: req.file.buffer,
@@ -508,6 +508,8 @@ exports.addPharmacyToClinic = async (req, res) => {
       }));
       pharmacyHeader = fileName;
     }
+
+  
 
     // Step 3: Generate pharmacyId if missing
     let pharmacyId = clinic.pharmacyId;
@@ -547,8 +549,6 @@ exports.addPharmacyToClinic = async (req, res) => {
   }
 };
 
-
-
 exports.getPharmacyByClinicId = async (req, res) => {
   try {
     const {addressId} = req.params
@@ -574,16 +574,23 @@ exports.getPharmacyByClinicId = async (req, res) => {
 
     // Step 3: Generate signed URL for pharmacyHeader if available
     let pharmacyHeaderUrl = null;
-    if (clinic.pharmacyHeader) {
-      pharmacyHeaderUrl = await getSignedUrl(
-        s3Client,
-        new GetObjectCommand({
-          Bucket: process.env.AWS_BUCKET_NAME,
-          Key: clinic.pharmacyHeader
-        }),
-        { expiresIn: 300 } // 5 min expiry
-      );
-    }
+
+
+      if (clinic.pharmacyHeader) {
+              // Generate signed S3 URL for pharmacy header image
+              try {
+                pharmacyHeaderUrl = await getSignedUrl(
+                  s3Client,
+                  new GetObjectCommand({
+                    Bucket: process.env.AWS_BUCKET_NAME,
+                    Key: clinic.pharmacyHeader,
+                  }),
+                  { expiresIn: 300 }
+                );
+              } catch (s3Err) {
+                console.error(`Error fetching S3 signed URL:`, s3Err.message);
+              }
+            }
 
     // Step 4: Return pharmacy details
     return res.status(200).json({
@@ -667,10 +674,12 @@ console.log("clinic=====", clinic)
       });
     }
 
+console.log("req.file====",req.file)
+
     // 2. Optional lab header image upload
     let labHeader = null;
     if (req.file) {
-      const fileName = `lab-header-${Date.now()}`;
+      const fileName = generateFileName();
       await s3Client.send(new PutObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Body: req.file.buffer,
@@ -679,6 +688,7 @@ console.log("clinic=====", clinic)
       }));
       labHeader = fileName;
     }
+console.log("labHeader=====", labHeader)
 
     // 3. Generate labId if not already present
     let labId = clinic.labId;
@@ -730,6 +740,79 @@ console.log("clinic=====", clinic)
     });
   }
 };
+
+
+
+exports.getLabByClinicId = async (req, res) => {
+  try {
+    const {addressId} = req.params
+    const userId = req.headers.userid || req.query.userId
+   
+
+    // Step 1: Find clinic/hospital with lab details
+    const clinic = await UserAddress.findOne({
+      userId,
+      addressId,
+      type: { $in: ['Clinic', 'Hospital'] }
+    });
+
+    if (!clinic) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Clinic not found for this user'
+      });
+    }
+
+    // Step 2: Ensure lab exists
+    if (!clinic.labId) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No lab found for this clinic'
+      });
+    }
+
+    // Step 3: Generate signed URL for labHeader if available
+    let labHeaderUrl = null;
+
+     if (clinic.labHeader) {
+              // Generate signed S3 URL for pharmacy header image
+              try {
+                labHeaderUrl = await getSignedUrl(
+                  s3Client,
+                  new GetObjectCommand({
+                    Bucket: process.env.AWS_BUCKET_NAME,
+                    Key: clinic.labHeader,
+                  }),
+                  { expiresIn: 300 }
+                );
+              } catch (s3Err) {
+                console.error(`Error fetching S3 signed URL:`, s3Err.message);
+              }
+            }
+
+    // Step 4: Return lab details
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        labId: clinic.labId,
+        labName: clinic.labName,
+        labRegistrationNo: clinic.labRegistrationNo,
+        labGst: clinic.labGst,
+        labPan: clinic.labPan,
+        labAddress: clinic.labAddress,
+        labHeader: labHeaderUrl,
+        updatedAt: clinic.updatedAt
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
 
 
 // New endpoint to confirm linking existing pharmacy/lab
