@@ -901,9 +901,57 @@ exports.getClinicAddress = async (req, res) => {
     //     message: 'No clinic or hospital address found for this user',
     //   });
     // }
+
+    const addressesWithUrls = [];
+    for (const address of userAddress) {
+      let headerImageUrl = null;
+      let digitalSignatureUrl = null;
+      let labHeaderUrl = null;
+
+      // Generate pre-signed URL for headerImage if it exists
+      if (address.headerImage) {
+        try {
+          headerImageUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: address.headerImage,
+            }),
+            { expiresIn: 300 } // 5 minutes
+          );
+        } catch (s3Error) {
+          console.error(`Failed to generate pre-signed URL for headerImage ${address.headerImage}:`, s3Error);
+        }
+      }
+
+      // Generate pre-signed URL for digitalSignature if it exists
+      if (address.digitalSignature) {
+        try {
+          digitalSignatureUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: address.digitalSignature,
+            }),
+            { expiresIn: 300 } // 5 minutes
+          );
+        } catch (s3Error) {
+          console.error(`Failed to generate pre-signed URL for digitalSignature ${address.digitalSignature}:`, s3Error);
+        }
+      }
+
+      
+
+      // Add address with pre-signed URLs to the result array
+      addressesWithUrls.push({
+        ...address.toObject(), // Convert Mongoose document to plain object
+        headerImage: headerImageUrl || address.headerImage, // Use URL if generated, else keep original
+        digitalSignature: digitalSignatureUrl || address.digitalSignature, // Use URL if generated, else keep original
+      });
+    }
     return res.status(200).json({
       status: 'success',
-      data: userAddress || []
+      data: addressesWithUrls || []
     });
     
   } catch (error) { 
@@ -989,28 +1037,94 @@ exports.uploadClinicHeader = async (req, res) => {
         });
       }
 
-    // Convert header image to base64
+    // Upload header image to S3
+      let headerImage = clinic.headerImage; // Preserve existing if not updated
       const headerFile = req.files.file[0];
-      const base64Image = `data:${headerFile.mimetype};base64,${headerFile.buffer.toString('base64')}`;
-
-      // Convert digital signature to base64 (if provided)
-      let base64Signature = clinic.digitalSignature; // Preserve existing signature if not updated
-      if (req.files.signature && req.files.signature[0]) {
-        const signatureFile = req.files.signature[0];
-        base64Signature = `data:${signatureFile.mimetype};base64,${signatureFile.buffer.toString('base64')}`;
+      try {
+        const headerFileName = generateFileName();
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Body: headerFile.buffer,
+            Key: headerFileName,
+            ContentType: headerFile.mimetype,
+          })
+        );
+        headerImage = headerFileName;
+        console.log('Header image uploaded to S3:', headerFileName);
+      } catch (s3Error) {
+        console.error('S3 header upload failed:', s3Error);
+        return res.status(500).json({
+          status: 'error',
+          message: 'Failed to upload header image to S3',
+          error: s3Error.message,
+        });
       }
 
-      // Update the clinic with the base64 image
-      clinic.headerImage = base64Image;
-      clinic.digitalSignature = base64Signature;
+      // Upload digital signature to S3 (if provided)
+      let digitalSignature = clinic.digitalSignature; // Preserve existing if not updated
+      if (req.files.signature && req.files.signature[0]) {
+        const signatureFile = req.files.signature[0];
+        try {
+          const signatureFileName = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: signatureFile.buffer,
+              Key: signatureFileName,
+              ContentType: signatureFile.mimetype,
+            })
+          );
+          digitalSignature = signatureFileName;
+          console.log('Digital signature uploaded to S3:', signatureFileName);
+        } catch (s3Error) {
+          console.error('S3 signature upload failed:', s3Error);
+          return res.status(500).json({
+            status: 'error',
+            message: 'Failed to upload digital signature to S3',
+            error: s3Error.message,
+          });
+        }
+      }
+
+     // Update the clinic with S3 object keys
+      clinic.headerImage = headerImage;
+      clinic.digitalSignature = digitalSignature;
       clinic.updatedAt = Date.now();
       await clinic.save();
+
+      // Generate pre-signed URLs for response
+      let headerImageUrl = null;
+      let digitalSignatureUrl = null;
+
+      if (headerImage) {
+        headerImageUrl = await getSignedUrl(
+          s3Client,
+          new GetObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: headerImage,
+          }),
+          { expiresIn: 300 } // 5 minutes
+        );
+      }
+
+      if (digitalSignature) {
+        digitalSignatureUrl = await getSignedUrl(
+          s3Client,
+          new GetObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: digitalSignature,
+          }),
+          { expiresIn: 300 } // 5 minutes
+        );
+      }
 
       return res.status(200).json({
         status: 'success',
         message: 'Header uploaded successfully',
-        data: {
-          headerImage: 'stored', // Indicate success without returning the full base64 string
+       data: {
+          headerImage: headerImageUrl || 'stored', // Return pre-signed URL or 'stored'
+          digitalSignature: digitalSignatureUrl || (digitalSignature ? 'stored' : null),
         },
       });
     } catch (error) {

@@ -12,6 +12,31 @@ const nodemailer = require('nodemailer');
 const ePrescription = require('../models/ePrescriptionModel');
 const ePrescriptionModel = require('../models/ePrescriptionModel');
 
+
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand
+} = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+
+const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
+const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
+const AWS_ACCESS_KEY = process.env.AWS_ACCESS_KEY;
+const AWS_SECRET_KEY = process.env.AWS_SECRET_KEY;
+
+const s3Client = new S3Client({
+  region: AWS_BUCKET_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY,
+    secretAccessKey: AWS_SECRET_KEY
+  }
+});
+
+const generateFileName = (bytes = 16) =>
+  crypto.randomBytes(bytes).toString("hex");
+
+
 // Configure Nodemailer transporter
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -190,9 +215,62 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    // Process addresses to include pre-signed S3 URLs
+    const userData = user[0];
+    const addressesWithUrls = [];
+    for (const address of userData.addresses) {
+      let headerImageUrl = null;
+      let digitalSignatureUrl = null;
+      let labHeaderUrl = null;
+
+      // Generate pre-signed URL for headerImage if it exists
+      if (address.headerImage) {
+        try {
+          headerImageUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: address.headerImage,
+            }),
+            { expiresIn: 300 } // 5 minutes
+          );
+        } catch (s3Error) {
+          console.error(`Failed to generate pre-signed URL for headerImage ${address.headerImage}:`, s3Error);
+        }
+      }
+
+      // Generate pre-signed URL for digitalSignature if it exists
+      if (address.digitalSignature) {
+        try {
+          digitalSignatureUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: address.digitalSignature,
+            }),
+            { expiresIn: 300 } // 5 minutes
+          );
+        } catch (s3Error) {
+          console.error(`Failed to generate pre-signed URL for digitalSignature ${address.digitalSignature}:`, s3Error);
+        }
+      }
+
+    
+
+      // Add address with pre-signed URLs
+      addressesWithUrls.push({
+        ...address,
+        headerImage: headerImageUrl || address.headerImage,
+        digitalSignature: digitalSignatureUrl || address.digitalSignature,
+      });
+    }
+
+    // Update user data with addresses containing pre-signed URLs
+    userData.addresses = addressesWithUrls;
+
     return res.status(200).json({
       status: 'success',
-      data: user[0]
+      data: userData
     });
   } catch (error) {
     res.status(500).json({

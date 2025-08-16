@@ -41,8 +41,8 @@ const userAggregation = (userId, excludeRefreshToken = false) => {
       $project: {
         'specialization.drgreeCertificate': 0,
         'specialization.specializationCertificate': 0,
-         'addresses.headerImage': 0,
-        'addresses.digitalSignature': 0,
+        //  'addresses.headerImage': 0,
+        // 'addresses.digitalSignature': 0,
        ...(excludeRefreshToken && { refreshToken: 0 })
       }
     }
