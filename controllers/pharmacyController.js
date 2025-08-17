@@ -283,6 +283,7 @@ exports.addMedInventoryBulk = [
 
 
 exports.addattach = async (req, res) => {
+  console.log("am in 0=====")
   let fileDeleted = false; // Track if file was deleted
 
   try {
