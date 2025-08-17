@@ -54,6 +54,7 @@ const s3Client = new S3Client({
 const { unlink } = require('fs').promises;
 const path = require('path')
 const FormData = require('form-data');
+const { waitForDebugger } = require("inspector");
 // const { fromFile } = require('file-type');
 // import fs from 'fs';
 // import path from 'path';
@@ -289,22 +290,24 @@ exports.addattach = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-    console.log("first", req.file)
-    console.log("req.file.mimetype",req.file.mimetype)
+   console.log("req.file=1==")
     if (!req.file.mimetype.includes("pdf")) {
       await unlink(req.file.path).catch((err) => console.error("Cleanup error:", err));
       return res.status(400).json({ error: "Only PDF files are allowed" });
     }
+   console.log("req.file=2==")
 
     const { prescriptionId } = req.body;
     if (!prescriptionId) {
       await unlink(req.file.path).catch((err) => console.error("Cleanup error:", err));
       return res.status(400).json({ error: "Prescription ID is missing" });
     }
+   console.log("req.file=3==")
 
   
     // Read file from disk
     const fileBuffer = await fs.promises.readFile(req.file.path);
+   console.log("req.file=4==")
 
     // Upload new attachment to S3
     // const newAttachment = await uploadAttachmentToS3(
@@ -319,13 +322,16 @@ exports.addattach = async (req, res) => {
     // }
 
    let whatsappmediaID= await this.uploadImageToAirtelAPI(req.file.path)
+   console.log("req.file=5==", whatsAppmediaID)
 
    let sendWhatsQrAppMessage = await this.sendWhatsQrAppMessage(req.body,whatsappmediaID)
 
+   console.log("req.file=6==", sendWhatsQrAppMessage)
 
     // Clean up the temporary file
     await unlink(req.file.path);
     fileDeleted = true; // Mark file as deleted
+   console.log("req.file=7==")
 
     // Update prescription in database
     // const result = await eprescriptionsModel.updateOne(
@@ -345,6 +351,7 @@ exports.addattach = async (req, res) => {
       // result
     });
   } catch (error) {
+    
     // Clean up file if not already deleted
     if (req.file && req.file.path && !fileDeleted) {
       try {
@@ -354,7 +361,7 @@ exports.addattach = async (req, res) => {
         console.error("Error cleaning up file:", cleanupError);
       }
     }
-
+console.log("Error in addattach:", error);
     console.error("Error in addattach:", error);
     res.status(500).json({
       error: "Failed to upload attachment",
