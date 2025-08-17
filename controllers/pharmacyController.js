@@ -774,7 +774,6 @@ console.log("===========97==6===")
 
 exports.addPrescription = async (req, res) => {
   try {
-    console.log("req.body", req.body);
     const { error, value } = prescriptionValidationSchema.validate(req.body, {
       abortEarly: false,
       stripUnknown: true,
