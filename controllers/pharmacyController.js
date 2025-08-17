@@ -323,11 +323,10 @@ exports.addattach = async (req, res) => {
     // }
 
    let whatsappmediaID= await this.uploadImageToAirtelAPI(req.file.path)
-   console.log("req.file=5==", whatsAppmediaID)
+   console.log("req.file=5==", whatsappmediaID)
 
    let sendWhatsQrAppMessage = await this.sendWhatsQrAppMessage(req.body,whatsappmediaID)
 
-   console.log("req.file=6==", sendWhatsQrAppMessage)
 
     // Clean up the temporary file
     await unlink(req.file.path);
