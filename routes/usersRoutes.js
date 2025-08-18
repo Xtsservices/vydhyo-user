@@ -20,6 +20,7 @@ const {
     getUserClinicsData,
     getKycByUserId,
     getUserIds,
+    getDoctorsListByFamily,
    
 } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic, addLabToClinic, getPharmacyByClinicId, getLabByClinicId } = require('../controllers/addressController');
@@ -102,6 +103,7 @@ router.get('/getAllSpecializations', getAllSpecializations);
 router.get('/getAllDoctorsBySpecializations/:specialization', getAllDoctorsBySpecializations);
 
 router.get("/getUserIds", getUserIds);
+router.get("/getDoctorsListByFamily/:familyProvider", getDoctorsListByFamily);
 
 
 module.exports = router;

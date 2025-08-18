@@ -11,6 +11,7 @@ const { userAggregation } = require('../queryBuilder/userAggregate');
 const nodemailer = require('nodemailer');
 const ePrescription = require('../models/ePrescriptionModel');
 const ePrescriptionModel = require('../models/ePrescriptionModel');
+const axios = require("axios");
 
 
 const {
@@ -1060,6 +1061,61 @@ exports.getUserIds = async(req, res) => {
       status: 'error',
       message: 'Error retrieving users',
       error: error.message,
+    });
+  }
+}
+
+exports.getDoctorsListByFamily = async(req, res) => {
+  try {
+const { familyProvider } = req.params;
+    if (!familyProvider ) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'familyProvider  required'
+      });
+    }
+    // Step 1: Fetch  All patients in family group
+    const users = await Users.find({ familyProvider: familyProvider }).select('userId');
+    const userIds = users.map(user => user.userId);
+    if (userIds.length === 0) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'No patients found for this family provider',
+        data: [],
+      });
+    }
+    
+    // step 2: All doctors they have appointments with
+     const resp = await axios.get(
+              `http://localhost:4005/appointment/getAllFamilyDoctors`,
+              {
+          params: { userIds: userIds },
+                headers: {
+            'Content-Type': 'application/json',
+            // Add authorization headers if needed
+            // 'Authorization': `Bearer ${req.headers.authorization}`
+          },
+              },
+               
+            );
+
+            console.log("resp.data", resp.data)
+    
+            //  Step 3: Basic doctor info
+    const doctors = resp.data.data;
+    const doctorData = await Users.find({ userId: { $in: doctors } })
+      .select('userId firstname lastname  specialization consultationModeFee')
+      .lean();
+    return res.status(200).json({
+      status: 'success',
+      message: 'Doctors list retrieved successfully',
+      data: doctorData
+    });
+  } catch (error) {
+    console.error('Error in getDoctorsListByFamily:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
     });
   }
 }
