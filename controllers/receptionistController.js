@@ -1857,7 +1857,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             model: TestInventory,
             select: "testName testPrice",
           })
-          .select("testName status createdAt testInventoryId labTestID _id prescriptionId");
+          .select("testName status createdAt testInventoryId labTestID _id prescriptionId updatedAt");
 
         // Fetch medicines and group by prescriptionId
         const medicines = await Medicine.find({
@@ -1870,7 +1870,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             model: MedInventory,
             select: "medName price gst cgst",
           })
-          .select("medName quantity status createdAt medInventoryId pharmacyMedID _id prescriptionId");
+          .select("medName quantity status createdAt medInventoryId pharmacyMedID _id prescriptionId updatedAt");
 
         // Filter appointments for this patient
         const patientAppointments = appointments.filter((appt) => appt.userId === patientId);
@@ -1906,6 +1906,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             status: test.status,
             price: test.testInventoryId?.testPrice ?? null,
             createdAt: test.createdAt,
+            updatedAt: test.updatedAt,
             // Attach lab data from address
             labDetails: addressMap[appointment.addressId]
               ? {
@@ -1934,6 +1935,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
             status: medicine.status,
             price: medicine.medInventoryId?.price ?? null,
             createdAt: medicine.createdAt,
+            updatedAt: medicine.updatedAt,
             // Attach pharmacy data from address
             pharmacyDetails: addressMap[appointment.addressId]
               ? {
