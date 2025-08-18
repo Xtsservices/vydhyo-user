@@ -1800,7 +1800,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
               Bucket: process.env.AWS_BUCKET_NAME,
               Key: address.pharmacyHeader,
             }),
-            { expiresIn: 3600 } // URL expires in 1 hour
+            { expiresIn: 3600 } // URL expires in 1 hour , 86400= 24 hours
           );
         } catch (error) {
           console.error(`Error generating signed URL for pharmacyHeader ${address.pharmacyHeader}:`, error.message);

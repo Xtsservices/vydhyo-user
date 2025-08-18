@@ -222,8 +222,8 @@ exports.getUserById = async (req, res) => {
     for (const address of userData.addresses) {
       let headerImageUrl = null;
       let digitalSignatureUrl = null;
-      let labHeaderUrl = null;
-
+     let pharmacyHeaderUrl = null;
+let labHeaderUrl = null;
       // Generate pre-signed URL for headerImage if it exists
       if (address.headerImage) {
         try {
@@ -249,20 +249,52 @@ exports.getUserById = async (req, res) => {
               Bucket: process.env.AWS_BUCKET_NAME,
               Key: address.digitalSignature,
             }),
-            { expiresIn: 300 } // 5 minutes
+            { expiresIn: 3600 } // 5 minutes
           );
         } catch (s3Error) {
           console.error(`Failed to generate pre-signed URL for digitalSignature ${address.digitalSignature}:`, s3Error);
         }
       }
 
+      // Generate pre-signed URL for pharmacyHeader if it exists
+if (address.pharmacyHeader) {
+  try {
+    pharmacyHeaderUrl = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: address.pharmacyHeader,
+      }),
+      { expiresIn: 3600 }
+    );
+  } catch (s3Error) {
+    console.error(`Failed to generate pre-signed URL for pharmacyHeader ${address.pharmacyHeader}:`, s3Error);
+  }
+}
     
+// Generate pre-signed URL for labHeader if it exists
+if (address.labHeader) {
+  try {
+    labHeaderUrl = await getSignedUrl(
+      s3Client,
+      new GetObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: address.labHeader,
+      }),
+      { expiresIn: 3600 }
+    );
+  } catch (s3Error) {
+    console.error(`Failed to generate pre-signed URL for labHeader ${address.labHeader}:`, s3Error);
+  }
+}
 
       // Add address with pre-signed URLs
       addressesWithUrls.push({
         ...address,
         headerImage: headerImageUrl || address.headerImage,
         digitalSignature: digitalSignatureUrl || address.digitalSignature,
+         pharmacyHeader: pharmacyHeaderUrl || address.pharmacyHeader,
+  labHeader: labHeaderUrl || address.labHeader,
       });
     }
 
