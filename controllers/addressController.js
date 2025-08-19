@@ -989,6 +989,7 @@ exports.getClinicAddress = async (req, res) => {
 
 exports.updateAddress = async (req, res) => {
   try {
+     const userId = req.body.userId || req.headers.userid;
     const { error } = updateAddressValidationSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
@@ -998,6 +999,133 @@ exports.updateAddress = async (req, res) => {
     }
     req.body.updatedBy = req.headers.userid;
     req.body.updatedAt = new Date();
+    // Pharmacy check
+    if (req.body.pharmacyRegistrationNo && !bypassCheck) {
+      const existingPharmacy = await UserAddress.findOne({
+        pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+        pharmacyId: { $ne: null },
+        userId: { $ne: userId },
+        addressId: { $ne: req.body.addressId }
+      });
+
+      if (existingPharmacy) {
+        const existingMapping = await pharmacyMapping.findOne({
+          pharmacyId: existingPharmacy.pharmacyId,
+          doctorId: userId
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This pharmacy is already registered with another doctor. Do you want to link it?',
+            data: {
+              pharmacyId: existingPharmacy.pharmacyId,
+              existingDoctorId: existingPharmacy.userId
+            }
+          });
+        }
+      }
+    }
+
+    // Lab check
+    if (req.body.labRegistrationNo && !bypassCheck) {
+      const existingLab = await UserAddress.findOne({
+        labRegistrationNo: req.body.labRegistrationNo,
+        labId: { $ne: null },
+        addressId: { $ne: req.body.addressId }
+      });
+
+      if (existingLab) {
+        const existingMapping = await labMapping.findOne({
+          labId: existingLab.labId,
+          doctorId: userId
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This lab is already registered with another doctor. Do you want to link it?',
+            data: {
+              labId: existingLab.labId,
+              existingDoctorId: existingLab.userId
+            }
+          });
+        }
+      }
+    }
+
+    // File uploads
+    if (req.files) {
+      // Clinic Header
+      if (req.files['file'] && req.files['file'][0]) {
+        const headerPhoto = generateFileName();
+        await s3Client.send(new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['file'][0].buffer,
+          Key: headerPhoto,
+          ContentType: req.files['file'][0].mimetype,
+        }));
+        req.body.headerImage = headerPhoto;
+      }
+
+      // Digital Signature
+      if (req.files['signature'] && req.files['signature'][0]) {
+        const signaturePhoto = generateFileName();
+        await s3Client.send(new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['signature'][0].buffer,
+          Key: signaturePhoto,
+          ContentType: req.files['signature'][0].mimetype,
+        }));
+        req.body.digitalSignature = signaturePhoto;
+      }
+
+      // Pharmacy Header
+      if (req.files['pharmacyHeader'] && req.files['pharmacyHeader'][0]) {
+        const pharmacyPhoto = generateFileName();
+        await s3Client.send(new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['pharmacyHeader'][0].buffer,
+          Key: pharmacyPhoto,
+          ContentType: req.files['pharmacyHeader'][0].mimetype
+        }));
+        req.body.pharmacyHeader = pharmacyPhoto;
+      }
+
+      // Lab Header
+      if (req.files['labHeader'] && req.files['labHeader'][0]) {
+        const labPhoto = generateFileName();
+        await s3Client.send(new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['labHeader'][0].buffer,
+          Key: labPhoto,
+          ContentType: req.files['labHeader'][0].mimetype
+        }));
+        req.body.labHeader = labPhoto;
+      }
+    }
+
+    // ID generation for pharmacy
+    if (req.body.pharmacyName && !req.body.pharmacyId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.PHARMACY_SEQUENCE.PHARMACY_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.pharmacyId = sequenceConstant.PHARMACY_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    // ID generation for lab
+    if (req.body.labName && !req.body.labId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.LAB_SEQUENCE.LAB_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    // Update address
     const userAddress = await UserAddress.findOneAndUpdate({ "addressId": req.body.addressId }, req.body, { new: true });
     if (!userAddress) {
       return res.status(404).json({
@@ -1005,9 +1133,45 @@ exports.updateAddress = async (req, res) => {
         message: 'User address not found',
       });
     }
+
+    // Update or create mappings
+    if (req.body.pharmacyId) {
+      await pharmacyMapping.findOneAndUpdate(
+        { doctorId: userId, clinicId: req.body.addressId },
+        {
+          pharmacyId: req.body.pharmacyId,
+          pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+          status: 'Active'
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    if (req.body.labId) {
+      await labMapping.findOneAndUpdate(
+        { doctorId: userId, clinicId: req.body.addressId },
+        {
+          labId: req.body.labId,
+          status: 'Active'
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    // Count mappings
+    const pharmacyMappingCount = req.body.pharmacyId
+      ? await pharmacyMapping.countDocuments({ pharmacyId: req.body.pharmacyId, status: 'Active' })
+      : 0;
+    const labMappingCount = req.body.labId
+      ? await labMapping.countDocuments({ labId: req.body.labId, status: 'Active' })
+      : 0;
     return res.status(200).json({
       status: 'success',
-      data: userAddress
+     data: {
+        userAddress,
+        pharmacyMappingCount,
+        labMappingCount
+      }
     });
   } catch (error) {
     return res.status(500).json({

@@ -73,7 +73,12 @@ router.get('/getLabByClinicId/:addressId', getLabByClinicId);
 
 
 
-router.put('/updateAddress', updateAddress);
+router.put('/updateAddress',  upload2.fields([
+    { name: 'file', maxCount: 1 }, // Clinic header
+    { name: 'signature', maxCount: 1 }, // Digital signature
+    { name: 'pharmacyHeader', maxCount: 1 },
+    { name: 'labHeader', maxCount: 1 }
+  ]),updateAddress);
 router.post('/uploadClinicHeader',  uploadClinicHeader);
 router.get('/getClinicNameByID/:addressId',  getClinicNameByID);
 
