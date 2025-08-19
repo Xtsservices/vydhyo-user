@@ -493,7 +493,8 @@ console.log("user====",user)
       "01jzzt1qq204fz496stragvr8x",
       [name,doctorfirstname,doctorlastname],
       [],
-      whatsappuploadedid
+      whatsappuploadedid,
+       order?.appointmentId || "prescription.pdf"
     );
 
 
@@ -538,7 +539,8 @@ const sendImageWithAttachment = async (
   templateId,
   variables,
   payload,
-  whatsappuploadedid = null
+  whatsappuploadedid = null,
+   originalFileName = "document.pdf"
 ) => {
   const url = 'https://iqwhatsapp.airtel.in/gateway/airtel-xchange/basic/whatsapp-manager/v1/template/send';
   const username = 'world_tek'; // Replace with your Airtel username
@@ -564,7 +566,8 @@ const sendImageWithAttachment = async (
     ...(whatsappuploadedid && {
       mediaAttachment: {
         type: "DOCUMENT",
-        id: whatsappuploadedid
+        id: whatsappuploadedid,
+         fileName: originalFileName 
       }
     })
   };
@@ -1910,7 +1913,7 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
           prescription.pharmacyData = null;
         }
       } catch (err) {
-        console.error(`Error fetching appointment or address for ${patient.patientId}`, err.message);
+        console.error(`Error fetching appointment or address for ${prescription.prescriptionId}`, err.message);
         prescription.addressId = null;
         prescription.pharmacyData = null;
       }

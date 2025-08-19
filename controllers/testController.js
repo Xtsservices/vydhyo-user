@@ -626,15 +626,18 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
     }
 
     const skip = (pageNum - 1) * limitNum;
+      const effectiveStatus = (typeof status === "string") ? status : "pending";
 
     // Build match conditions
-    const matchConditions = { doctorId };
+       const matchConditions = { doctorId, isDeleted: false };
+
 
     if (searchValue) {
       matchConditions.patientId = { $regex: searchValue, $options: "i" }; // Case-insensitive search
     }
 
     // Status filter: default to "pending" if not provided
+     // Status filter: default to "pending" if not provided
     if (typeof status === "string") {
       if (status === "pending") {
         matchConditions.status = "pending";
@@ -648,9 +651,27 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       matchConditions.status = "pending"; // default
     }
 
+    // Calculate 48-hour threshold
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+
     // Build aggregation pipeline
     const pipeline = [
       { $match: matchConditions },
+
+       // Lookup eprescriptions to get appointmentId and addressId
+            {
+              $lookup: {
+                from: "eprescriptions",
+                localField: "prescriptionId",
+                foreignField: "prescriptionId",
+                as: "prescriptionData",
+              },
+            },
+            { $unwind: { path: "$prescriptionData", preserveNullAndEmptyArrays: true } },
+            
+             // Exclude medicines with no matching eprescription
+            { $match: { prescriptionData: { $ne: null } } },
 
       {
         $lookup: {
@@ -694,9 +715,42 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       },
       { $unwind: { path: "$userData", preserveNullAndEmptyArrays: true } },
 
+        ...(searchValue
+        ? [
+            {
+              $match: {
+                $or: [
+                  { patientId: { $regex: searchValue, $options: "i" } },
+                  {
+                    $expr: {
+                      $regexMatch: {
+                        input: {
+                          $trim: {
+                            input: {
+                              $concat: [
+                                { $ifNull: ["$userData.firstname", ""] },
+                                " ",
+                                { $ifNull: ["$userData.lastname", ""] },
+                              ],
+                            },
+                          },
+                        },
+                        regex: searchValue,
+                        options: "i",
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ]
+        : []),
+
       {
         $group: {
-          _id: "$patientId",
+          _id: "$prescriptionId",  // Changed to group by prescriptionId (proxy for appointmentId)
+        appointmentId: { $first: "$prescriptionData.appointmentId" },
+          patientId: { $first: "$patientId" },
           patientName: {
             $first: {
               $concat: [
@@ -707,7 +761,9 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
             },
           },
           doctorId: { $first: "$doctorId" },
-          latestCreatedAt: { $max: "$createdAt" }, // used for sorting
+          addressId: { $first: "$prescriptionData.addressId" },
+          prescriptionCreatedAt: { $first: "$prescriptionData.createdAt" }, // Capture eprescriptions createdAt
+       
           tests: {
             $push: {
               _id: "$_id",
@@ -722,17 +778,41 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
       },
 
       // Sort BEFORE projecting away latestCreatedAt
-      { $sort: { latestCreatedAt: -1 } },
+        { $sort: { prescriptionCreatedAt: -1 } },
 
       // Final shape (keep latestCreatedAt if you want it on the client)
       {
         $project: {
-          patientId: "$_id",
+        prescriptionId: "$_id", // or appointmentId: "$_id" if grouping by appointmentId
+          appointmentId: 1,
+          patientId: 1,
           patientName: 1,
           doctorId: 1,
+           addressId: 1,
+           prescriptionCreatedAt: 1, 
           tests: 1,
           _id: 0,
           // latestCreatedAt: 1, // <- uncomment if you want to return it
+        },
+      },
+
+       // Drop patients that have no medicines after filtering
+      { $match: { medicines: { $ne: [] } } },
+
+      // Filter out pending prescriptions older than 48 hours
+      {
+        $match: {
+          $or: [
+            // Include groups with any non-pending medicines
+            { tests: { $elemMatch: { status: { $ne: "pending" } } } },
+            // Include pending-only groups created within 48 hours
+            {
+              $and: [
+                { tests: { $not: { $elemMatch: { status: { $ne: "pending" } } } } },
+                { prescriptionCreatedAt: { $gte: fortyEightHoursAgo } },
+              ],
+            },
+          ],
         },
       },
 
@@ -753,22 +833,7 @@ const getAllTestsPatientsByDoctorID = async (req, res) => {
     // Step 2: Fetch addressId from Appointment Service and enrich with lab data
     for (const patient of patients) {
       try {
-        const resp = await axios.get(
-          "http://localhost:4005/appointment/getAppointmentDataByUserIdAndDoctorId",
-          {
-            params: {
-              doctorId: patient.doctorId,
-              userId: patient.patientId,
-            },
-            headers: {
-              "Content-Type": "application/json",
-              // 'Authorization': Bearer ${req.headers.authorization} // if needed
-            },
-          }
-        );
-
-        const addressId = resp.data?.data?.addressId || null;
-        patient.addressId = addressId;
+         const addressId = patient.addressId;
 
         if (addressId) {
           const address = await UserAddress.findOne({ addressId }).lean();
