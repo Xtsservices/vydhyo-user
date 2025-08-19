@@ -1364,3 +1364,17 @@ exports.searchClinics = async (req, res) => {
     res.status(500).json({ status: 'error', message: err.message });
   }
 };
+
+exports.getClinicNameByID = async (req, res) => {
+  try {
+    const address = await UserAddress.findOne({ addressId: req.params.addressId });
+    if (!address) {
+      return res.status(404).json({ status: 'fail', message: 'Address not found' });
+    }
+    res.status(200).json({ clinicName: address.clinicName });
+  } catch (err) {
+    console.error('Clinic search error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
