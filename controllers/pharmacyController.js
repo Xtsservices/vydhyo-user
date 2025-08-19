@@ -999,10 +999,11 @@ exports.addPrescription = async (req, res) => {
                   ...existingPrescriptionTests,
                   ...newTests,
                 ],
-                medications: [
-                  ...existingPrescriptionMedications,
-                  ...newMedications,
-                ],
+                medications: newMedications,
+                // medications: [
+                //   ...existingPrescriptionMedications,
+                //   ...newMedications,
+                // ],
               }
             : null,
           advice: {
