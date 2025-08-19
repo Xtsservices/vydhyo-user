@@ -329,7 +329,7 @@ exports.addattach = async (req, res) => {
 
 
     // Clean up the temporary file
-    await unlink(req.file.path);
+    // await unlink(req.file.path);
     fileDeleted = true; // Mark file as deleted
    console.log("req.file=7==")
 
@@ -1701,9 +1701,25 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
       statusCond = { $eq: ["$$medicine.status", effectiveStatus] };
     }
 
+    // Calculate 48-hour threshold
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
     const pipeline = [
       { $match: matchConditions },
 
+      // Lookup eprescriptions to get appointmentId and addressId
+      {
+        $lookup: {
+          from: "eprescriptions",
+          localField: "prescriptionId",
+          foreignField: "prescriptionId",
+          as: "prescriptionData",
+        },
+      },
+      { $unwind: { path: "$prescriptionData", preserveNullAndEmptyArrays: true } },
+      
+       // Exclude medicines with no matching eprescription
+      { $match: { prescriptionData: { $ne: null } } },
       {
         $lookup: {
           from: "medinventories",
@@ -1758,7 +1774,9 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
 
       {
         $group: {
-          _id: "$patientId",
+        _id: "$prescriptionId",  // Changed to group by prescriptionId (proxy for appointmentId)
+        appointmentId: { $first: "$prescriptionData.appointmentId" },
+          patientId: { $first: "$patientId" },
           patientName: {
             $first: {
               $trim: {
@@ -1773,7 +1791,8 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
             },
           },
           doctorId: { $first: "$doctorId" },
-          latestCreatedAt: { $max: "$createdAt" },
+          addressId: { $first: "$prescriptionData.addressId" },
+          prescriptionCreatedAt: { $first: "$prescriptionData.createdAt" }, // Capture eprescriptions createdAt
           medicines: {
             $push: {
               _id: "$_id",
@@ -1791,14 +1810,18 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
       },
 
       // IMPORTANT: sort BEFORE projecting away latestCreatedAt
-      { $sort: { latestCreatedAt: -1 } },
+     { $sort: { prescriptionCreatedAt: -1 } },
 
       // Filter medicines by effective status
       {
         $project: {
-          patientId: "$_id",
+       prescriptionId: "$_id", // or appointmentId: "$_id" if grouping by appointmentId
+          appointmentId: 1,
+          patientId: 1,
           patientName: 1,
           doctorId: 1,
+          addressId: 1,
+           prescriptionCreatedAt: 1, 
           // keep latestCreatedAt if you want to show it to client; otherwise omit it
           // latestCreatedAt: 1,
           medicines: {
@@ -1815,6 +1838,23 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
       // Drop patients that have no medicines after filtering
       { $match: { medicines: { $ne: [] } } },
 
+      // Filter out pending prescriptions older than 48 hours
+      {
+        $match: {
+          $or: [
+            // Include groups with any non-pending medicines
+            { medicines: { $elemMatch: { status: { $ne: "pending" } } } },
+            // Include pending-only groups created within 48 hours
+            {
+              $and: [
+                { medicines: { $not: { $elemMatch: { status: { $ne: "pending" } } } } },
+                { prescriptionCreatedAt: { $gte: fortyEightHoursAgo } },
+              ],
+            },
+          ],
+        },
+      },
+
       {
         $facet: {
           paginatedResults: [{ $skip: skip }, { $limit: limitNum }],
@@ -1825,24 +1865,15 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
 
     const [result = { paginatedResults: [], totalCount: [] }] = await medicineModel.aggregate(pipeline);
 
-    const patients = result.paginatedResults || [];
-    const totalPatients = result.totalCount?.[0]?.count || 0;
-    const totalPages = Math.ceil(totalPatients / limitNum);
+    const prescriptions = result.paginatedResults || [];
+    const totalPrescriptions = result.totalCount?.[0]?.count || 0;
+    const totalPages = Math.ceil(totalPrescriptions / limitNum);
 
     // Enrich with appointment + pharmacy header
-    for (const patient of patients) {
+    for (const prescription of prescriptions) {
       try {
-        const resp = await axios.get(
-          "http://localhost:4005/appointment/getAppointmentDataByUserIdAndDoctorId",
-          {
-            params: { doctorId: patient.doctorId, userId: patient.patientId },
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-
-        const addressId = resp.data?.data?.addressId || null;
-        patient.addressId = addressId;
-
+       const addressId = prescription.addressId;
+      
         if (addressId) {
           const address = await UserAddress.findOne({ addressId }).lean();
           if (address && address.pharmacyName) {
@@ -1863,7 +1894,7 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
               }
             }
 
-            patient.pharmacyData = {
+            prescription.pharmacyData = {
               pharmacyName: address.pharmacyName,
               pharmacyRegistrationNo: address.pharmacyRegistrationNo,
               pharmacyGst: address.pharmacyGst,
@@ -1873,29 +1904,29 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
               pharmacyHeaderUrl,
             };
           } else {
-            patient.pharmacyData = null;
+            prescription.pharmacyData = null;
           }
         } else {
-          patient.pharmacyData = null;
+          prescription.pharmacyData = null;
         }
       } catch (err) {
         console.error(`Error fetching appointment or address for ${patient.patientId}`, err.message);
-        patient.addressId = null;
-        patient.pharmacyData = null;
+        prescription.addressId = null;
+        prescription.pharmacyData = null;
       }
     }
 
-    console.log("Patients retrieved:", patients, "Total:", totalPatients);
+    console.log("Patients retrieved:", prescriptions, "Total:", totalPrescriptions);
 
     return res.status(200).json({
       status: "success",
       message: "Pharmacy patients retrieved successfully",
       data: {
-        patients,
+        patients:prescriptions,
         pagination: {
           page: pageNum,
           limit: limitNum,
-          totalPatients,
+          totalPatients:totalPrescriptions,
           totalPages,
         },
       },

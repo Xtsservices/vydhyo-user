@@ -69,7 +69,7 @@ const prescriptionValidationSchema = Joi.object({
   }),
   userId: Joi.string().trim().required().messages({
     "string.empty": "User ID is required",
-    "any.required": "User ID is required",
+    "any.required": "User ID is required",  
   }),
   doctorId: Joi.string().trim().required().messages({
     "string.empty": "Doctor ID is required",
