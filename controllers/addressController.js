@@ -998,8 +998,26 @@ exports.updateAddress = async (req, res) => {
         message: error.details[0].message,
       });
     }
-    req.body.updatedBy = req.headers.userid;
-    req.body.updatedAt = new Date();
+
+    const updateFields = { ...req.body, updatedBy: userId, updatedAt: new Date() };
+
+    // Clinic name duplicate check if clinicName is provided
+    if (updateFields.clinicName) {
+      const existingClinic = await UserAddress.findOne({
+        clinicName: updateFields.clinicName,
+        userId: userId,
+        addressId: { $ne: req.body.addressId },
+      });
+
+      if (existingClinic) {
+        return res.status(400).json({
+          status: 'fail',
+          message: 'This clinic name is already registered for this user with another address.',
+          data: { existingAddressId: existingClinic.addressId },
+        });
+      }
+    }
+   
     // Pharmacy check
     if (req.body.pharmacyRegistrationNo && !bypassCheck) {
       const existingPharmacy = await UserAddress.findOne({
@@ -1127,7 +1145,13 @@ exports.updateAddress = async (req, res) => {
     }
 
     // Update address
-    const userAddress = await UserAddress.findOneAndUpdate({ "addressId": req.body.addressId }, req.body, { new: true });
+    // Update address using $set to update only provided fields
+    const userAddress = await UserAddress.findOneAndUpdate(
+      { addressId: req.body.addressId },
+      { $set: updateFields },
+      { new: true }
+    );
+    // const userAddress = await UserAddress.findOneAndUpdate({ "addressId": req.body.addressId }, req.body, { new: true });
     if (!userAddress) {
       return res.status(404).json({
         status: 'fail',
