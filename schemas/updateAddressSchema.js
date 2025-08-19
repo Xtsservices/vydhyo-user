@@ -19,7 +19,8 @@ const updateAddressValidationSchema = Joi.object({
     coordinates: Joi.array().items(Joi.number()).length(2).default([0, 0])
   }).optional(),
   status: Joi.string().valid('Active', 'InActive').optional(),
-
+ pharmacyName: Joi.string().allow(null),
+labName: Joi.string().allow(null, '').optional(),
  
    pharmacyRegistrationNo: Joi.when('pharmacyName', {
       is: Joi.string().trim().min(1).required(),
