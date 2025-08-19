@@ -329,7 +329,7 @@ exports.addattach = async (req, res) => {
 
 
     // Clean up the temporary file
-    // await unlink(req.file.path);
+    await unlink(req.file.path);
     fileDeleted = true; // Mark file as deleted
    console.log("req.file=7==")
 
