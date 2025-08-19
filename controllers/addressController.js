@@ -989,7 +989,8 @@ exports.getClinicAddress = async (req, res) => {
 
 exports.updateAddress = async (req, res) => {
   try {
-     const userId = req.body.userId || req.headers.userid;
+     const userId =  req.headers.userid;
+     const bypassCheck = req.query.bypassCheck;
     const { error } = updateAddressValidationSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
