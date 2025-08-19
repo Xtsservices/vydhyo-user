@@ -472,6 +472,12 @@ if (req.files) {
     });
 
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Clinic name already exists',
+      });
+    }
     return res.status(500).json({
       status: 'fail',
       message: error.message,
@@ -1024,7 +1030,6 @@ exports.updateAddress = async (req, res) => {
         pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
         pharmacyId: { $ne: null },
         userId: { $ne: userId },
-        addressId: { $ne: req.body.addressId }
       });
 
       if (existingPharmacy) {
@@ -1032,6 +1037,7 @@ exports.updateAddress = async (req, res) => {
           pharmacyId: existingPharmacy.pharmacyId,
           doctorId: userId
         });
+
 
         if (!existingMapping) {
           return res.status(200).json({
@@ -1051,7 +1057,6 @@ exports.updateAddress = async (req, res) => {
       const existingLab = await UserAddress.findOne({
         labRegistrationNo: req.body.labRegistrationNo,
         labId: { $ne: null },
-        addressId: { $ne: req.body.addressId }
       });
 
       if (existingLab) {
@@ -1059,6 +1064,8 @@ exports.updateAddress = async (req, res) => {
           labId: existingLab.labId,
           doctorId: userId
         });
+
+        
 
         if (!existingMapping) {
           return res.status(200).json({
