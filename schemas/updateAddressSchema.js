@@ -3,7 +3,7 @@ const Joi = require('joi');
 const updateAddressValidationSchema = Joi.object({
     addressId: Joi.string().required(),
     type: Joi.string().optional(),
-  clinicName: Joi.string().min(2).max(250).optional(),
+  clinicName: Joi.string().allow(null, '').optional(),
   mobile: Joi.string().allow(null).optional(),
     countrycode: Joi.string().default('+91').optional(),
     status: Joi.string().valid('Active', 'InActive').optional(),

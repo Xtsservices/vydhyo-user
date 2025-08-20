@@ -1150,7 +1150,7 @@ exports.updateAddress = async (req, res) => {
       );
       req.body.labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE + counter.seq;
     }
-
+console.log("am in==1234==")  
     // Update address
     // Update address using $set to update only provided fields
     const userAddress = await UserAddress.findOneAndUpdate(

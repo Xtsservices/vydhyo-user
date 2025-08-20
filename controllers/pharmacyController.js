@@ -781,6 +781,7 @@ exports.addPrescription = async (req, res) => {
       stripUnknown: true,
     });
 
+    console.log("value===", value)
     if (error) {
       const errorMessages = error.details.map((detail) => detail.message);
       return res.status(400).json({
@@ -800,13 +801,14 @@ exports.addPrescription = async (req, res) => {
       advice,
     } = value;
 
+    console.log("diagnosis===", diagnosis )
     // Check if prescription exists for this appointment
     let eprescription = await eprescriptionsModel.findOne({ appointmentId });
 
 
     let prescriptionId;
     if (!eprescription) {
-
+console.log("No existing prescription found, creating a new one");
       // Generate unique prescriptionId for new prescription
       const prescriptionCounter = await Counter.findByIdAndUpdate(
         { _id: PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.EPRESCRIPTION_MODEL },
@@ -824,6 +826,7 @@ exports.addPrescription = async (req, res) => {
     const existingTests = await patientTestModel.find({
       patientId: userId,
       doctorId,
+      prescriptionId,
       isDeleted: false,
       status: { $ne: 'cancelled' },
     });
@@ -831,6 +834,7 @@ exports.addPrescription = async (req, res) => {
     const existingMedications = await medicineModel.find({
       patientId: userId,
       doctorId,
+      prescriptionId,
       isDeleted: false,
       status: { $ne: 'cancelled' },
     });
@@ -838,6 +842,16 @@ exports.addPrescription = async (req, res) => {
     // Save or update medicines
     let newMedications = [];
     if (diagnosis?.medications && diagnosis.medications.length > 0) {
+      console.log("diagnosis.medications===", diagnosis.medications)
+      // Delete existing medications for this prescriptionId to avoid duplicates and ensure only new ones are stored
+      await medicineModel.deleteMany({
+        prescriptionId,
+        patientId: userId,
+        doctorId,
+        isDeleted: false,
+        status: { $ne: "cancelled" },
+      });
+      
       for (const medicine of diagnosis.medications) {
         const {
           medInventoryId,
@@ -851,20 +865,22 @@ exports.addPrescription = async (req, res) => {
         } = medicine;
 
         // Check for duplicate medication
-        const isDuplicate = existingMedications.some(
-          (existing) =>
-            existing.medName === medName 
-          // &&
-          //   existing.dosage === dosage &&
-          //   existing.duration === duration &&
-          //   existing.frequency === frequency &&
-            // existing.timings === (Array.isArray(timings) ? timings.join(", ") : timings)
-        );
+        // const isDuplicate = existingMedications.some(
+        //   (existing) =>
+        //     existing.medName === medName 
+        //   // &&
+        //   //   existing.dosage === dosage &&
+        //   //   existing.duration === duration &&
+        //   //   existing.frequency === frequency &&
+        //     // existing.timings === (Array.isArray(timings) ? timings.join(", ") : timings)
+        // );
 
-        if (isDuplicate) {
-          console.log(`Skipping duplicate medication: ${medName}`);
-          continue;
-        }
+        // if (isDuplicate) {
+        //   console.log(`Skipping duplicate medication: ${medName}`);
+        //   continue;
+        // }
+     
+
  let finalMedInventoryId2 = medInventoryId ? new mongoose.Types.ObjectId(medInventoryId) : null;
 
        let finalMedInventoryId = medInventoryId &&  mongoose.Types.ObjectId.isValid(medInventoryId)
@@ -900,6 +916,7 @@ exports.addPrescription = async (req, res) => {
           updatedBy: req.headers.userid,
         }).save();
 
+        console.log("newMedicine===", newMedicine)
         newMedications.push({
           medInventoryId: newMedicine.medInventoryId,
           medName: newMedicine.medName,
@@ -911,23 +928,41 @@ exports.addPrescription = async (req, res) => {
           frequency: newMedicine.frequency,
         });
       }
+    } else {
+      // If no medications are sent, clear existing medications
+      await medicineModel.deleteMany({
+        prescriptionId,
+        patientId: userId,
+        doctorId,
+        isDeleted: false,
+        status: { $ne: "cancelled" },
+      });
     }
-
+console.log("newMedications===", newMedications)
     // Save or update tests
     let newTests = [];
     if (diagnosis?.selectedTests && diagnosis.selectedTests.length > 0) {
+      // Delete existing tests for this prescriptionId to avoid duplicates and ensure only new ones are stored
+      await patientTestModel.deleteMany({
+        prescriptionId,
+        patientId: userId,
+        doctorId,
+        isDeleted: false,
+        status: { $ne: "cancelled" },
+      });
+
       for (const test of diagnosis.selectedTests) {
         const { testInventoryId, testName } = test;
 
         // Check for duplicate test
-        const isDuplicate = existingTests.some(
-          (existing) => existing.testName === testName
-        );
+        // const isDuplicate = existingTests.some(
+        //   (existing) => existing.testName === testName
+        // );
 
-        if (isDuplicate) {
-          console.log(`Skipping duplicate test: ${testName}`);
-          continue;
-        }
+        // if (isDuplicate) {
+        //   console.log(`Skipping duplicate test: ${testName}`);
+        //   continue;
+        // }
 
         const testCounter = await Counter.findByIdAndUpdate(
           { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
@@ -952,12 +987,21 @@ exports.addPrescription = async (req, res) => {
           testName: newTest.testName,
         });
       }
+    } else {
+      // If no tests are sent, clear existing tests
+      await patientTestModel.deleteMany({
+        prescriptionId,
+        patientId: userId,
+        doctorId,
+        isDeleted: false,
+        status: { $ne: "cancelled" },
+      });
     }
 
     // Merge existing and new tests/medications for the prescription document
     const existingPrescriptionTests = eprescription?.diagnosis?.selectedTests || [];
     const existingPrescriptionMedications = eprescription?.diagnosis?.medications || [];
-
+    console.log("existingPrescriptionMedications===", existingPrescriptionMedications)
     // Create or update e-prescription document
     if (eprescription) {
       // Update existing prescription
@@ -995,10 +1039,11 @@ exports.addPrescription = async (req, res) => {
                 diagnosisNote: diagnosis.diagnosisNote || null,
                 testsNote: diagnosis.testsNote || null,
               
-                selectedTests: [
-                  ...existingPrescriptionTests,
-                  ...newTests,
-                ],
+                // selectedTests: [
+                //   ...existingPrescriptionTests,
+                //   ...newTests,
+                // ],
+                selectedTests: newTests,
                 medications: newMedications,
                 // medications: [
                 //   ...existingPrescriptionMedications,
@@ -1052,6 +1097,8 @@ exports.addPrescription = async (req, res) => {
               diagnosisNote: diagnosis.diagnosisNote || null,
               testsNote: diagnosis.testsNote || null,
              
+              //   selectedTests: newTests,
+              // medications: newMedications,
               selectedTests: diagnosis.selectedTests || [],
               medications: diagnosis.medications || [],
             }

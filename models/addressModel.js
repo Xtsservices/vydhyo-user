@@ -21,7 +21,8 @@ const addressSchema = new mongoose.Schema({
   },
   clinicName: {
     type: String,
-    required: true,
+      default: null
+    // required: true,
     // unique: false,
   },
    pharmacyName: {
