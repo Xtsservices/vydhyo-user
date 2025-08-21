@@ -2041,7 +2041,7 @@ exports.fetchMyDoctorPatients7 = async (req, res) => {
   }
 };
 
-exports.fetchMyDoctorPatients2 = async (req, res) => {
+exports.fetchMyDoctorPatients = async (req, res) => {
   try {
     const doctorId = req.params.doctorId || req.headers.userid;
     if (!doctorId) {
@@ -2095,17 +2095,20 @@ exports.fetchMyDoctorPatients2 = async (req, res) => {
       ];
     }
 
+    
+
 
     // Step 3: Fetch patients, prescriptions, and addresses in parallel
     const [patients, prescriptions, addressIds] = await Promise.all([
-      User.find({ role: "patient", userId: { $in: patientIds }, isDeleted: false })
-        .select("firstname lastname email userId DOB gender bloodgroup mobile age")
-        .lean(),
-      ePrescriptionModel.find({ doctorId, userId: { $in: patientIds } })
-        .select("prescriptionId appointmentId createdAt")
-        .lean(),
-      Promise.resolve([...new Set(appointments.map(appt => appt.addressId).filter(id => id))]),
-    ]);
+  User.find(searchQuery)
+    .select("firstname lastname email userId DOB gender bloodgroup mobile age")
+    .lean(),
+  ePrescriptionModel.find({ doctorId, userId: { $in: patientIds } })
+    .select("prescriptionId appointmentId createdAt")
+    .lean(),
+  Promise.resolve([...new Set(appointments.map(appt => appt.addressId).filter(id => id))]),
+]);
+
 
     if (!patients.length) {
       return res.status(200).json({
@@ -2326,8 +2329,8 @@ exports.fetchMyDoctorPatients2 = async (req, res) => {
               appointmentStatus: appointment.appointmentStatus,
               createdAt: appointment.createdAt,
               addressId: appointment.addressId,
-              tests: appointmentTests,
-              medicines: appointmentMedicines,
+              // tests: appointmentTests,
+              // medicines: appointmentMedicines,
               feeDetails: payment
                 ? {
                     actualAmount: payment.actualAmount,
@@ -2372,7 +2375,7 @@ exports.fetchMyDoctorPatients2 = async (req, res) => {
   }
 };
 
-exports.fetchMyDoctorPatients = async (req, res) => {
+exports.fetchMyDoctorPatients3 = async (req, res) => {
   try {
     const doctorId = req.params.doctorId || req.headers.userid;
     if (!doctorId) {
@@ -2712,6 +2715,8 @@ exports.fetchMyDoctorPatients = async (req, res) => {
     });
   }
 };
+
+
 
 exports.totalBillPayFromReception = async (req, res) => {
   try {
