@@ -2540,7 +2540,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
       )
       .catch(() => ({ data: { data: [] } }));
 
-    const appointments = appointmentResponse.data.data
+    const appointments = appointmentResponse.data.data;
 
     // Fetch addressIds
     const addressIds = [
@@ -2638,6 +2638,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
       const appointmentId = appointment.appointmentId;
       const addressInfo = addressMap.get(appointment.addressId);
 
+      // Tests without repeating labDetails
       const appointmentTests = testsAgg
         .filter(t => t.prescriptionId === prescriptionId)
         .map(t => ({
@@ -2648,18 +2649,9 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
           price: t.testInventory?.testPrice ?? null,
           createdAt: t.createdAt,
           updatedAt: t.updatedAt,
-          labDetails: addressInfo
-            ? {
-                labName: addressInfo.labName,
-                labHeaderUrl: addressInfo.labHeaderUrl || null,
-                labAddress: addressInfo.labAddress,
-                labGst: addressInfo.labGst,
-                labPan: addressInfo.labPan,
-                labRegistrationNo: addressInfo.labRegistrationNo,
-              }
-            : null,
         }));
 
+      // Medicines without repeating pharmacyDetails
       const appointmentMedicines = medicinesAgg
         .filter(m => m.prescriptionId === prescriptionId)
         .map(m => ({
@@ -2673,17 +2665,33 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
           price: m.medInventory?.price ?? null,
           createdAt: m.createdAt,
           updatedAt: m.updatedAt,
-          pharmacyDetails: addressInfo
-            ? {
-                pharmacyName: addressInfo.pharmacyName,
-                pharmacyHeaderUrl: addressInfo.pharmacyHeaderUrl || null,
-                pharmacyAddress: addressInfo.pharmacyAddress,
-                pharmacyGst: addressInfo.pharmacyGst,
-                pharmacyPan: addressInfo.pharmacyPan,
-                pharmacyRegistrationNo: addressInfo.pharmacyRegistrationNo,
-              }
-            : null,
         }));
+
+      // Extract labDetails only once
+      let labDetails = null;
+      if (appointmentTests.length > 0 && addressInfo) {
+        labDetails = {
+          labName: addressInfo.labName,
+          labHeaderUrl: addressInfo.labHeaderUrl || null,
+          labAddress: addressInfo.labAddress,
+          labGst: addressInfo.labGst,
+          labPan: addressInfo.labPan,
+          labRegistrationNo: addressInfo.labRegistrationNo,
+        };
+      }
+
+      // Extract pharmacyDetails only once
+      let pharmacyDetails = null;
+      if (appointmentMedicines.length > 0 && addressInfo) {
+        pharmacyDetails = {
+          pharmacyName: addressInfo.pharmacyName,
+          pharmacyHeaderUrl: addressInfo.pharmacyHeaderUrl || null,
+          pharmacyAddress: addressInfo.pharmacyAddress,
+          pharmacyGst: addressInfo.pharmacyGst,
+          pharmacyPan: addressInfo.pharmacyPan,
+          pharmacyRegistrationNo: addressInfo.pharmacyRegistrationNo,
+        };
+      }
 
       const payment = payments.find(p => p.appointmentId === appointmentId);
       const prescriptionCreatedAt =
@@ -2723,6 +2731,8 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
               : null,
           },
         ],
+        labDetails,        // ✅ only once
+        pharmacyDetails,   // ✅ only once
         tests: appointmentTests,
         medicines: appointmentMedicines,
       };
@@ -2739,7 +2749,6 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
       .json({ success: false, error: "Internal Server Error" });
   }
 };
-
 
 
 
