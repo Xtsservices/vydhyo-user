@@ -1,9 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const {googleAddressSuggession, searchClinics} = require("../controllers/addressController");
+const { googleAddressSuggession, searchClinics, getCities } = require("../controllers/addressController");
+// Get list of unique cities
 
 //Routes for approve Doctors
 router.get("/googleAddressSuggession", googleAddressSuggession);
 router.get("/searchClinics", searchClinics);
+router.get("/cities", getCities);
+
 
 module.exports = router;
