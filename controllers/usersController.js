@@ -20,6 +20,7 @@ const {
   GetObjectCommand
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const { generateReferralCode } = require('../utils/referralCode');
 
 const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
 const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
@@ -1151,3 +1152,55 @@ const { familyProvider } = req.params;
     });
   }
 }
+
+
+exports.generateReferralCode = async (req, res) => {
+  try {
+    const userId = req.headers.userid; 
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID required" });
+    }
+
+    let user = await Users.findOne({ userId: userId });
+
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+      if (user.role !== "patient") {
+      return res.status(403).json({ message: "Only patients can generate referral codes" });
+    }
+    // Check if already has a referral code
+    if (user.referralCode) {
+      return res.status(200).json({
+        message: "Referral code already exists",
+        referralCode: user.referralCode
+      });
+    }
+
+    // Generate unique referral code
+    let code;
+    let exists = true;
+    do {
+      code = generateReferralCode();
+      exists = await Users.findOne({ referralCode: code });
+    } while (exists);
+
+    user.referralCode = code;
+    await user.save();
+
+    res.status(201).json({
+      message: "Referral code generated successfully",
+      referralCode: code
+    });
+  } catch (error) {
+    console.error('Error in generateReferralCode:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+  }
+}
+  

@@ -134,7 +134,13 @@ const userSchema = new mongoose.Schema({
    familyProvider: {
     type: String,
     default: null // Set to userId of the primary family member or null if self
-  }
+  },
+   referralCode: { type: String, unique: true, sparse: true },
+    referredBy: {  
+      type: String,
+     default: null
+     }
+
 });
 
 module.exports = mongoose.model('User', userSchema);
