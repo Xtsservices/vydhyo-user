@@ -1576,60 +1576,6 @@ exports.getClinicNameByID = async (req, res) => {
 };
 
 
-// Get list of unique cities from addresses
-exports.getCities = async (req, res) => {
-  try {
 
-    const citiesAgg = await UserAddress.aggregate([
-      {
-        $match: {
-          type: 'Clinic',
-          status: 'Active',
-          city: { $ne: null, $ne: '', $exists: true }
-        }
-      },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: 'userId',
-          as: 'user'
-        }
-      },
-      { $unwind: '$user' },
-      {
-        $match: {
-          'user.role': 'doctor',
-          'user.status': 'approved'
-        }
-      },
-      {
-        $addFields: {
-          cityTrimmed: { $trim: { input: '$city' } },
-          cityLower: { $toLower: { $trim: { input: '$city' } } }
-        }
-      },
-      {
-        $group: {
-          _id: '$cityLower',
-          city: { $first: '$cityTrimmed' }
-        }
-      },
-      { $sort: { city: 1 } }
-    ]);
-
-    const cities = citiesAgg.map(c => c.city);
-    res.status(200).json({
-      status: 'success',
-      data: cities
-    });
-  } catch (err) {
-    console.error('Error in getCities:', err);
-    res.status(500).json({
-      status: 'fail',
-      message: err.message
-    });
-  }
-};
 
 
