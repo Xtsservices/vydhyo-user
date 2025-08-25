@@ -81,19 +81,20 @@ const upload = multer({
 
 exports.addMedInventory = async (req, res) => {
   try {
-    const { medName, price, quantity, doctorId, gst, cgst } = req.body;
+    const { medName, dosage, price, quantity, doctorId, gst, cgst } = req.body;
 
     // Validate required fields
-    if (!medName || !price || !quantity || !doctorId) {
+    if (!medName  || !dosage || !price || !quantity || !doctorId) {
       return res.status(400).json({
         status: "fail",
-        message: "All fields (medName, price, quantity, doctorId) are required",
+        message: "All fields (medName, dosage, price, quantity, doctorId) are required",
       });
     }
 
     // Check for existing medicine with same medName and doctorId
     const existingMedicine = await medInventoryModel.findOne({
       medName: { $regex: `^${medName}$`, $options: "i" }, // Case-insensitive match
+       dosage: { $regex: `^${dosage}$`, $options: "i" }, // Case-insensitive match
       doctorId,
     });
 
@@ -107,6 +108,7 @@ exports.addMedInventory = async (req, res) => {
     // Create new medicine inventory entry
     const medInventory = new medInventoryModel({
       medName,
+       dosage,
       price,
       quantity,
       doctorId,
@@ -131,14 +133,17 @@ exports.addMedInventory = async (req, res) => {
 };
 
 // Helper function to check duplicates
-const checkDuplicates = async (doctorId, medNames) => {
+const checkDuplicates = async (doctorId, medicines) => {
   const existing = await medInventoryModel
     .find({
       doctorId,
-      medName: { $in: medNames.map((name) => new RegExp(`^${name}$`, "i")) },
+       $or: medicines.map(({ medName, dosage }) => ({
+        medName: { $regex: `^${medName}$`, $options: "i" },
+        dosage: { $regex: `^${dosage}$`, $options: "i" },
+      })),
     })
     .lean();
-  return new Set(existing.map((med) => med.medName.toLowerCase()));
+  return new Set(existing.map((med) => `${med.medName.toLowerCase()}|${med.dosage.toLowerCase()}`));
 };
 
 exports.addMedInventoryBulk = [
@@ -168,7 +173,7 @@ exports.addMedInventoryBulk = [
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const data = xlsx.utils.sheet_to_json(sheet, {
-        header: ["medName", "price", "quantity", "gst", "cgst"],
+        header: ["medName", "dosage", "price", "quantity", "gst", "cgst"],
       });
 
       if (data.length <= 1) {
@@ -180,12 +185,12 @@ exports.addMedInventoryBulk = [
       }
 
       // Validate headers
-      const expectedHeaders = ["medName", "price", "quantity", "gst", "cgst"];
+      const expectedHeaders = ["medName", "dosage", "price", "quantity", "gst", "cgst"];
       const firstRow = data[0];
       if (!expectedHeaders.every((header) => header in firstRow)) {
         return res.status(400).json({
           status: "fail",
-          message: "Excel file must have headers: medName, price, quantity, gst, cgst",
+          message: "Excel file must have headers: medName, dosage, price, quantity, gst, cgst",
         });
       }
 
@@ -197,10 +202,10 @@ exports.addMedInventoryBulk = [
       const medicinesToInsert = [];
       const existingMedicines = await checkDuplicates(
         doctorId,
-        data.map((row) => row.medName)
+       data.map((row) => ({ medName: row.medName, dosage: row.dosage }))
       );
 
-      const processedMedNames = new Set();
+ const processedMedDosagePairs = new Set();
 
       for (const [index, row] of data.entries()) {
         // Override doctorId from body/headers
@@ -221,21 +226,24 @@ exports.addMedInventoryBulk = [
         }
 
         // Check for duplicates (database and within file)
-        const medNameLower = medicine.medName.toLowerCase();
+        // const medNameLower = medicine.medName.toLowerCase();
+          const medDosageKey = `${medicine.medName.toLowerCase()}|${medicine.dosage.toLowerCase()}`;
+
 
         if (
-          existingMedicines.has(medNameLower) ||
-          processedMedNames.has(medNameLower)
+          existingMedicines.has(medDosageKey) ||
+          processedMedDosagePairs.has(medDosageKey)
         ) {
           errors.push({
             row: index + 2,
-            message: `Medicine '${medicine.medName}' already exists for doctor ${doctorId}`,
+             message: `Medicine '${medicine.medName}' with dosage '${medicine.dosage}' already exists for doctor ${doctorId}`,
           });
           continue;
         }
 
         medicinesToInsert.push({
           medName: medicine.medName,
+           dosage: medicine.dosage,
           price: medicine.price,
           quantity: medicine.quantity,
           doctorId: doctorId,
@@ -243,7 +251,7 @@ exports.addMedInventoryBulk = [
           cgst: medicine.cgst,
           createdAt: new Date(),
         });
-        processedMedNames.add(medNameLower);
+        processedMedDosagePairs.add(medDosageKey);
       }
 
       // Insert valid medicines

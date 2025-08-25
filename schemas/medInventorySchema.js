@@ -6,6 +6,10 @@ const medInventoryValidationSchema = Joi.object({
     'string.empty': 'Medicine name is required',
     'any.required': 'Medicine name is required'
   }),
+   dosage: Joi.string().trim().required().messages({
+    'string.empty': 'Dosage is required',
+    'any.required': 'Dosage is required'
+  }),
   price: Joi.number().min(0).required().messages({
     'number.base': 'Price must be a number',
     'number.min': 'Price cannot be negative',

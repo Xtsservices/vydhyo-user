@@ -6,6 +6,11 @@ const medInventorySchema = new mongoose.Schema({
     required: [true, 'Medicine name is required'],
     trim: true
   },
+   dosage: {
+    type: String,
+    required: [true, 'Dosage is required'],
+    trim: true
+  },
   price: {
     type: Number,
     required: [true, 'Price is required'],
