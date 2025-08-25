@@ -6,7 +6,6 @@ const { googleAddressSuggession, searchClinics, getCities } = require("../contro
 //Routes for approve Doctors
 router.get("/googleAddressSuggession", googleAddressSuggession);
 router.get("/searchClinics", searchClinics);
-router.get("/cities", getCities);
 
 
 module.exports = router;

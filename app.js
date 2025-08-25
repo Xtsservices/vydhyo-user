@@ -9,6 +9,9 @@ const DoctorDashboardRouter = require('./routes/DoctorDashboardRouter');
 const addressRouter = require('./routes/addressRouter');
 const PharmacyRouter = require('./routes/pharmacyRouter');
 const labRouter = require('./routes/labRouter')
+const whatsappRouter = require('./routes/whatsappRouter')
+
+
 const bodyParser = require("body-parser");
 require('dotenv').config();
 const connectDB = require('./utils/db');
@@ -32,6 +35,7 @@ app.use('/doctorDashboard', DoctorDashboardRouter);
 app.use('/address', addressRouter);
 app.use('/pharmacy', PharmacyRouter);
 app.use('/lab', labRouter);
+app.use('/whatsapp', whatsappRouter);
 
 
 
