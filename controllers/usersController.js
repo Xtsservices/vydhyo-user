@@ -219,6 +219,26 @@ exports.getUserById = async (req, res) => {
 
     // Process addresses to include pre-signed S3 URLs
     const userData = user[0];
+     /** ------------------  Handle Bank Details ------------------ */
+    if (userData.bankDetails) {
+      try {
+        // Decrypt fields
+        if (userData.bankDetails.accountHolderName) {
+          userData.bankDetails.accountHolderName = decrypt(userData.bankDetails.accountHolderName);
+        }
+        if (userData.bankDetails.accountNumber) {
+          const decryptedAccNo = decrypt(userData.bankDetails.accountNumber);
+
+          // Mask account number (show first 2 and last 3 digits only)
+          userData.bankDetails.accountNumber = decryptedAccNo.replace(
+            /^(\d{2})(\d+)(\d{3})$/,
+            (match, first, middle, last) => first + '*'.repeat(middle.length) + last
+          );
+        }
+      } catch (err) {
+        console.error("Bank details decryption failed:", err.message);
+      }
+    }
     const addressesWithUrls = [];
     for (const address of userData.addresses) {
       let headerImageUrl = null;
@@ -423,11 +443,21 @@ exports.getKycByUserId = async (req, res) => {
     //   });
     // }
 
+     let kycDetails = kycData[0].kycDetails || null;
+
+    // 🔑 Decrypt PAN before sending response
+    if (kycDetails && kycDetails.pan && kycDetails.pan.number) {
+      try {
+        kycDetails.pan.number = decrypt(kycDetails.pan.number);
+      } catch (err) {
+        console.error("PAN decryption failed:", err.message);
+      }
+    }
     
 
     return res.status(200).json({
       status: 'success',
-      data: kycData[0].kycDetails || null // Return null if no KYC details found
+       data: kycDetails
     });
   } catch (error) {
     res.status(500).json({

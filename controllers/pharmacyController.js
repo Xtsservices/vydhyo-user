@@ -1779,14 +1779,34 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
       
        // Exclude medicines with no matching eprescription
       { $match: { prescriptionData: { $ne: null } } },
-      {
+       {
         $lookup: {
           from: "medinventories",
-          localField: "medInventoryId",
-          foreignField: "_id",
+          let: { medName: "$medName", dosage: "$dosage", doctorId: "$doctorId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: [{ $toLower: "$medName" }, { $toLower: "$$medName" }] },
+                    { $eq: [{ $toLower: "$dosage" }, { $toLower: "$$dosage" }] },
+                    { $eq: ["$doctorId", "$$doctorId"] },
+                  ],
+                },
+              },
+            },
+          ],
           as: "inventoryData",
         },
       },
+      // {
+      //   $lookup: {
+      //     from: "medinventories",
+      //     localField: "medInventoryId",
+      //     foreignField: "_id",
+      //     as: "inventoryData",
+      //   },
+      // },
       { $unwind: { path: "$inventoryData", preserveNullAndEmptyArrays: true } },
 
       {
@@ -1856,6 +1876,7 @@ exports.getAllPharmacyPatientsByDoctorID = async (req, res) => {
             $push: {
               _id: "$_id",
               medName: "$medName",
+              dosage: "$dosage",
               price: { $ifNull: ["$inventoryData.price", null] },
               quantity: "$quantity",
               status: "$status",
@@ -2121,7 +2142,7 @@ exports.updatePatientMedicinePrice = async (req, res) => {
       price: Joi.number().min(0).required(),
       doctorId: Joi.string().required(),
     }).validate(req.body, { abortEarly: false });
-
+console.log("Request body:", req.body); // Debug log
     if (error) {
       return res.status(400).json({
         status: "fail",
@@ -2129,11 +2150,12 @@ exports.updatePatientMedicinePrice = async (req, res) => {
         errors: error.details.map((detail) => detail.message),
       });
     }
-
+console.log("Validation passed"); // Debug log
     const { medicineId, patientId, price, doctorId } = req.body;
 
     // Verify patient exists
     const patient = await User.findOne({ userId: patientId });
+    console.log("Patient found:", patient); // Debug log
     if (!patient) {
       return res.status(404).json({
         status: "fail",
@@ -2149,7 +2171,7 @@ exports.updatePatientMedicinePrice = async (req, res) => {
       isDeleted: false,
       status: { $ne: "cancelled" },
     });
-
+console.log("Medicine found:", medicine); // Debug log
     if (!medicine) {
       return res.status(404).json({
         status: "fail",
@@ -2160,18 +2182,21 @@ exports.updatePatientMedicinePrice = async (req, res) => {
     // Check if medicine exists in MedInventory
     let medInventory = await medInventoryModel.findOne({
       medName: medicine.medName,
+      dosage: { $regex: `^${medicine.dosage}$`, $options: "i" }, // Case-insensitive match
       doctorId,
     });
 
+    console.log("MedInventory found:", medInventory); // Debug log
     if (!medInventory) {
       // Create new inventory entry if it doesn't exist
       medInventory = await medInventoryModel.create({
         medName: medicine.medName,
+         dosage: medicine.dosage,
         price,
         quantity: medicine.quantity,
         doctorId,
       });
-
+console.log("New MedInventory created:", medInventory); // Debug log
       // Update medicine with new medInventoryId
       await medicineModel.findByIdAndUpdate(
         medicineId,
@@ -2179,6 +2204,7 @@ exports.updatePatientMedicinePrice = async (req, res) => {
         { new: true }
       );
     } else {
+      console.log("Updating existing MedInventory"); // Debug log
       // Update existing inventory price
       medInventory = await medInventoryModel.findByIdAndUpdate(
         medInventory._id,
@@ -2186,7 +2212,7 @@ exports.updatePatientMedicinePrice = async (req, res) => {
         { new: true }
       );
     }
-
+console.log("MedInventory after update:", medInventory); // Debug log
     // Update price in medicine record
     const updatedMedicine = await medicineModel.findByIdAndUpdate(
       medicineId,
@@ -2199,7 +2225,7 @@ exports.updatePatientMedicinePrice = async (req, res) => {
       },
       { new: true }
     );
-
+console.log("Medicine after price update:", updatedMedicine); // Debug log
     return res.status(200).json({
       status: "success",
       message: "Price updated successfully",
