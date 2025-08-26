@@ -604,7 +604,7 @@ exports.updateSpecialization = async (req, res) => {
     };
 
     // Optional: Handle file uploads if you're sending certificates as files instead of base64
-    if (req.files.drgreeCertificate && req.files.drgreeCertificate.length > 0) {
+    if (req?.files?.drgreeCertificate && req?.files?.drgreeCertificate.length > 0) {
       const filePath = req.files.drgreeCertificate[0].path;
       const { mimeType, base64 } = convertImageToBase64(filePath);
       if (!req.body.drgreeCertificate) {
@@ -617,7 +617,7 @@ exports.updateSpecialization = async (req, res) => {
  // Clean up temporary file
      
     }
-    if (req.files.specializationCertificate && req.files.specializationCertificate.length > 0) {
+    if (req?.files?.specializationCertificate && req?.files?.specializationCertificate.length > 0) {
       const filePath = req.files.specializationCertificate[0].path;
       const { mimeType, base64 } = convertImageToBase64(filePath);
       updateFields.specialization.specializationCertificate = { data: base64, mimeType };

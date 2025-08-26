@@ -84,7 +84,7 @@ const prescriptionValidationSchema = Joi.object({
       "string.empty": "Patient name is required",
       "any.required": "Patient name is required",
     }),
-    age: Joi.number().integer().min(0).required().messages({
+    age: Joi.string().min(0).required().messages({
       "number.base": "Age must be a number",
       "number.integer": "Age must be an integer",
       "number.min": "Age cannot be negative",
