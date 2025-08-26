@@ -446,11 +446,34 @@ exports.getKycByUserId = async (req, res) => {
      let kycDetails = kycData[0].kycDetails || null;
 
     // 🔑 Decrypt PAN before sending response
-    if (kycDetails && kycDetails.pan && kycDetails.pan.number) {
-      try {
-        kycDetails.pan.number = decrypt(kycDetails.pan.number);
-      } catch (err) {
-        console.error("PAN decryption failed:", err.message);
+
+     if (kycDetails) {
+      // Decrypt PAN number
+      if (kycDetails.pan && kycDetails.pan.number) {
+        try {
+          kycDetails.pan.number = decrypt(kycDetails.pan.number);
+        } catch (err) {
+          console.error("PAN decryption failed:", err.message);
+        }
+      }
+
+      // Generate signed URL for panImage
+      if (kycDetails.panImage) {
+        try {
+          kycDetails.panImageUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: kycDetails.panImage,
+            }),
+            { expiresIn: 3600 } // 1 hour, matching headerImageUrl
+          );
+        } catch (s3Err) {
+          console.error("Error fetching S3 signed URL for panImage:", s3Err.message);
+          kycDetails.panImageUrl = null;
+        }
+      } else {
+        kycDetails.panImageUrl = null;
       }
     }
     

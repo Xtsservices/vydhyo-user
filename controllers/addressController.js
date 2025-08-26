@@ -1564,7 +1564,7 @@ exports.searchClinics = async (req, res) => {
 
 exports.getClinicNameByID = async (req, res) => {
   try {
-    const address = await UserAddress.findOne({ addressId: req.params.addressId });
+    const address = await UserAddress.findOne({ addressId: req.params.addressId,  status: "Active"  });
     if (!address) {
       return res.status(404).json({ status: 'fail', message: 'Address not found' });
     }
