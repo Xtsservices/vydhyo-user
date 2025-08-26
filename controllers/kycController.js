@@ -4,6 +4,30 @@ const kycDetailsSchema = require('../schemas/kycDetailsSchema');
 const { encrypt, decrypt } = require('../utils/encryptData');
 const { convertImageToBase64 } = require('../utils/imageService');
 const {validatePan} = require('../utils/validatePan');
+const crypto = require("crypto");
+
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand
+} = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+
+const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
+const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
+const AWS_ACCESS_KEY = process.env.AWS_ACCESS_KEY;
+const AWS_SECRET_KEY = process.env.AWS_SECRET_KEY;
+
+const s3Client = new S3Client({
+  region: AWS_BUCKET_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY,
+    secretAccessKey: AWS_SECRET_KEY
+  }
+});
+
+const generateFileName = (bytes = 16) =>
+  crypto.randomBytes(bytes).toString("hex");
 
 // Create KYC Details
 //master code
@@ -110,19 +134,26 @@ exports.addKYCDetails = async (req, res) => {
     if (!req.files.panFile || req.files.panFile.length === 0) {
       return res.status(400).json({ status: 'fail', message: 'PAN file is required' });
     }
+
+     let panFileKey = null;
     // if (!req.files.voterFile || req.files.voterFile.length === 0) {
     //   return res.status(400).json({ status: 'fail', message: 'voter file is required' });
     // }
     if (req.files.panFile && req.files.panFile.length > 0) {
-      const filePath = req.files.panFile[0].path;
-      const { mimeType, base64 } = convertImageToBase64(filePath);
-      if (!req.body.panAttachmentUrl) {
-        req.body.panAttachmentUrl = {};
-      }
-      req.body.panAttachmentUrl.data = base64;
-      req.body.panAttachmentUrl.mimeType = mimeType;
+       const file = req.files.panFile[0];
+      const fileName = generateFileName();
+
+      await s3Client.send(new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: fileName,
+        Body: file.buffer,
+        ContentType: file.mimetype
+      }));
+
+      panFileKey = fileName;
+
       // Clean up the temporary file
-      fs.unlinkSync(filePath);
+      // fs.unlinkSync(file.path);
     }
 console.log('PAN Validation Response:', 1900);
 
@@ -157,10 +188,7 @@ console.log('PAN Validation Response:', 1900);
       userId: req.body.userId,
       pan: {
         number: encryptedPanNumber,
-        attachmentUrl: {
-          data: req.body.panAttachmentUrl ? req.body.panAttachmentUrl.data : null,
-          mimeType: req.body.panAttachmentUrl ? req.body.panAttachmentUrl.mimeType : null
-        },
+        attachmentUrl: panFileKey,
         status: 'pending',
       },
       // voter: {

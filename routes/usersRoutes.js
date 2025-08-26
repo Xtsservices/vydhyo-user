@@ -89,7 +89,7 @@ router.get('/getInsuranceById', getInsuranceById);
 router.put('/updateInsurance', updateInsurance);
 
 // Routes for KYC management
-router.post('/addKYCDetails', upload.fields([
+router.post('/addKYCDetails', upload2.fields([
     { name: 'panFile', maxCount: 1 },
     // { name: 'voterFile', maxCount: 1 }
 ]), addKYCDetails);
