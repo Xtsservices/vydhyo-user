@@ -39,7 +39,7 @@ const patientTestSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "in-progress", "completed", "cancelled"],
+      enum: ["pending", "in-progress", "completed", "cancelled", "deleted"],
       default: "pending",
     },
     isDeleted: {

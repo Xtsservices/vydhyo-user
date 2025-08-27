@@ -75,7 +75,7 @@ const medicineSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'in-progress', 'completed', 'cancelled'],
+      enum: ['pending', 'in-progress', 'completed', 'cancelled', 'deleted'],
       default: 'pending',
     },
     isDeleted: {
@@ -112,5 +112,14 @@ medicineSchema.index(
     partialFilterExpression: { status: { $ne: 'cancelled' }, isDeleted: false },
   }
 );
+
+// Updated compound index to include dosage
+// medicineSchema.index(
+//   { medName: 1, dosage: 1, patientId: 1, doctorId: 1 },
+//   {
+//     unique: true,
+//     partialFilterExpression: { status: { $nin: ['cancelled', 'deleted'] }, isDeleted: false },
+//   }
+// );
 
 module.exports = mongoose.model('Medicine', medicineSchema);

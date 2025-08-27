@@ -782,7 +782,7 @@ console.log("===========97==6===")
   }
 };
 
-exports.addPrescription = async (req, res) => {
+exports.addPrescription2 = async (req, res) => {
   try {
     const { error, value } = prescriptionValidationSchema.validate(req.body, {
       abortEarly: false,
@@ -852,13 +852,13 @@ console.log("No existing prescription found, creating a new one");
     if (diagnosis?.medications && diagnosis.medications.length > 0) {
       console.log("diagnosis.medications===", diagnosis.medications)
       // Delete existing medications for this prescriptionId to avoid duplicates and ensure only new ones are stored
-      await medicineModel.deleteMany({
-        prescriptionId,
-        patientId: userId,
-        doctorId,
-        isDeleted: false,
-        status: { $ne: "cancelled" },
-      });
+      // await medicineModel.deleteMany({
+      //   prescriptionId,
+      //   patientId: userId,
+      //   doctorId,
+      //   isDeleted: false,
+      //   status: { $ne: "cancelled" },
+      // });
       
       for (const medicine of diagnosis.medications) {
         const {
@@ -873,20 +873,20 @@ console.log("No existing prescription found, creating a new one");
         } = medicine;
 
         // Check for duplicate medication
-        // const isDuplicate = existingMedications.some(
-        //   (existing) =>
-        //     existing.medName === medName 
-        //   // &&
-        //   //   existing.dosage === dosage &&
-        //   //   existing.duration === duration &&
-        //   //   existing.frequency === frequency &&
-        //     // existing.timings === (Array.isArray(timings) ? timings.join(", ") : timings)
-        // );
+        const isDuplicate = existingMedications.some(
+          (existing) =>
+            existing.medName === medName 
+          // &&
+          //   existing.dosage === dosage &&
+          //   existing.duration === duration &&
+          //   existing.frequency === frequency &&
+            // existing.timings === (Array.isArray(timings) ? timings.join(", ") : timings)
+        );
 
-        // if (isDuplicate) {
-        //   console.log(`Skipping duplicate medication: ${medName}`);
-        //   continue;
-        // }
+        if (isDuplicate) {
+          console.log(`Skipping duplicate medication: ${medName}`);
+          continue;
+        }
      
 
  let finalMedInventoryId2 = medInventoryId ? new mongoose.Types.ObjectId(medInventoryId) : null;
@@ -938,39 +938,39 @@ console.log("No existing prescription found, creating a new one");
       }
     } else {
       // If no medications are sent, clear existing medications
-      await medicineModel.deleteMany({
-        prescriptionId,
-        patientId: userId,
-        doctorId,
-        isDeleted: false,
-        status: { $ne: "cancelled" },
-      });
+      // await medicineModel.deleteMany({
+      //   prescriptionId,
+      //   patientId: userId,
+      //   doctorId,
+      //   isDeleted: false,
+      //   status: { $ne: "cancelled" },
+      // });
     }
 console.log("newMedications===", newMedications)
     // Save or update tests
     let newTests = [];
     if (diagnosis?.selectedTests && diagnosis.selectedTests.length > 0) {
       // Delete existing tests for this prescriptionId to avoid duplicates and ensure only new ones are stored
-      await patientTestModel.deleteMany({
-        prescriptionId,
-        patientId: userId,
-        doctorId,
-        isDeleted: false,
-        status: { $ne: "cancelled" },
-      });
+      // await patientTestModel.deleteMany({
+      //   prescriptionId,
+      //   patientId: userId,
+      //   doctorId,
+      //   isDeleted: false,
+      //   status: { $ne: "cancelled" },
+      // });
 
       for (const test of diagnosis.selectedTests) {
         const { testInventoryId, testName } = test;
 
         // Check for duplicate test
-        // const isDuplicate = existingTests.some(
-        //   (existing) => existing.testName === testName
-        // );
+        const isDuplicate = existingTests.some(
+          (existing) => existing.testName === testName
+        );
 
-        // if (isDuplicate) {
-        //   console.log(`Skipping duplicate test: ${testName}`);
-        //   continue;
-        // }
+        if (isDuplicate) {
+          console.log(`Skipping duplicate test: ${testName}`);
+          continue;
+        }
 
         const testCounter = await Counter.findByIdAndUpdate(
           { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
@@ -997,13 +997,13 @@ console.log("newMedications===", newMedications)
       }
     } else {
       // If no tests are sent, clear existing tests
-      await patientTestModel.deleteMany({
-        prescriptionId,
-        patientId: userId,
-        doctorId,
-        isDeleted: false,
-        status: { $ne: "cancelled" },
-      });
+      // await patientTestModel.deleteMany({
+      //   prescriptionId,
+      //   patientId: userId,
+      //   doctorId,
+      //   isDeleted: false,
+      //   status: { $ne: "cancelled" },
+      // });
     }
 
     // Merge existing and new tests/medications for the prescription document
@@ -1047,16 +1047,16 @@ console.log("newMedications===", newMedications)
                 diagnosisNote: diagnosis.diagnosisNote || null,
                 testsNote: diagnosis.testsNote || null,
               
-                // selectedTests: [
-                //   ...existingPrescriptionTests,
-                //   ...newTests,
-                // ],
-                selectedTests: newTests,
-                medications: newMedications,
-                // medications: [
-                //   ...existingPrescriptionMedications,
-                //   ...newMedications,
-                // ],
+                selectedTests: [
+                  ...existingPrescriptionTests,
+                  ...newTests,
+                ],
+                // selectedTests: newTests,
+                // medications: newMedications,
+                medications: [
+                  ...existingPrescriptionMedications,
+                  ...newMedications,
+                ],
               }
             : null,
           advice: {
@@ -1146,6 +1146,967 @@ console.log("newMedications===", newMedications)
               )
             )
           : [],
+      },
+    });
+  } catch (error) {
+    console.log("error", error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Duplicate prescription, test, or medication entry detected",
+      });
+    }
+
+    res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error",
+    });
+  }
+};
+//only checking medicine name for duplicates
+exports.addPrescription4 = async (req, res) => {
+  try {
+    const { error, value } = prescriptionValidationSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      const errorMessages = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        status: "fail",
+        message: "Validation failed",
+        errors: errorMessages,
+      });
+    }
+
+    const {
+      userId,
+      doctorId,
+      appointmentId,
+      addressId,
+      patientInfo,
+      vitals,
+      diagnosis,
+      advice,
+    } = value;
+
+    // Check if prescription exists for this appointment
+    let eprescription = await eprescriptionsModel.findOne({ appointmentId });
+    let isNewPrescription = !eprescription;
+
+    let prescriptionId;
+    if (isNewPrescription) {
+      console.log("No existing prescription found, creating a new one");
+      const prescriptionCounter = await Counter.findByIdAndUpdate(
+        { _id: PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.EPRESCRIPTION_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      prescriptionId = PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.SEQUENCE.concat(
+        prescriptionCounter.seq
+      );
+    } else {
+      prescriptionId = eprescription.prescriptionId;
+    }
+
+    // Fetch existing tests and medications
+    const existingTests = await patientTestModel.find({
+      patientId: userId,
+      doctorId,
+      prescriptionId,
+      isDeleted: false,
+      status: { $nin: ['cancelled', 'deleted'] }, // Updated to exclude "deleted"
+    });
+
+    const existingMedications = await medicineModel.find({
+      patientId: userId,
+      doctorId,
+      prescriptionId,
+      isDeleted: false,
+      status: { $nin: ['cancelled', 'deleted'] }, // Updated to exclude "deleted"
+    });
+
+    // Determine if we need to process medications and tests
+    const processMedications = diagnosis && 'medications' in diagnosis;
+    const processTests = diagnosis && 'selectedTests' in diagnosis;
+
+    const sentMedications = processMedications ? (diagnosis.medications || []) : [];
+    const sentTests = processTests ? (diagnosis.selectedTests || []) : [];
+
+    // Process medications
+    let newMedications = [];
+    let medicationWarnings = [];
+    if (processMedications) {
+      const sentMedNames = new Set(sentMedications.map(m => m.medName));
+      const existingMedMap = new Map(existingMedications.map(m => [m.medName, m]));
+
+      for (const medicine of sentMedications) {
+        const {
+          medInventoryId,
+          medName,
+          quantity,
+          medicineType,
+          dosage,
+          duration,
+          timings,
+          frequency,
+        } = medicine;
+
+        let existing = existingMedMap.get(medName);
+        if (existing) {
+          const timingsStr = Array.isArray(timings) ? timings.join(", ") : timings;
+          const medInvIdStr = medInventoryId ? medInventoryId : null;
+          const existingMedInvIdStr = existing.medInventoryId ? existing.medInventoryId.toString() : null;
+
+          if (
+            existing.quantity !== quantity ||
+            existing.medicineType !== medicineType ||
+            existing.dosage !== dosage ||
+            existing.duration !== duration ||
+            existing.timings !== timingsStr ||
+            existing.frequency !== frequency ||
+            existingMedInvIdStr !== medInvIdStr
+          ) {
+            if (existing.status === 'pending') {
+              let finalMedInventoryId = medInventoryId && mongoose.Types.ObjectId.isValid(medInventoryId)
+                ? new mongoose.Types.ObjectId(medInventoryId)
+                : null;
+
+              existing.medInventoryId = finalMedInventoryId;
+              existing.quantity = quantity;
+              existing.medicineType = medicineType;
+              existing.dosage = dosage;
+              existing.duration = duration;
+              existing.timings = timingsStr;
+              existing.frequency = frequency;
+              existing.updatedBy = req.headers.userid;
+              await existing.save();
+            } else {
+              console.log(`Cannot update non-pending medication: ${medName}`);
+            }
+          }
+
+          newMedications.push({
+            medInventoryId: existing.medInventoryId ? existing.medInventoryId.toString() : null,
+            medName: existing.medName,
+            quantity: existing.quantity,
+            medicineType: existing.medicineType,
+            dosage: existing.dosage,
+            duration: existing.duration,
+            timings: existing.timings ? existing.timings.split(", ") : [],
+            frequency: existing.frequency,
+          });
+        } else {
+          let finalMedInventoryId = medInventoryId && mongoose.Types.ObjectId.isValid(medInventoryId)
+            ? new mongoose.Types.ObjectId(medInventoryId)
+            : null;
+
+          let inventory = await medInventoryModel.findOne({ medName, doctorId });
+          if (!inventory && medInventoryId) {
+            inventory = await medInventoryModel.findById(medInventoryId);
+          }
+
+          const medCounter = await Counter.findByIdAndUpdate(
+            { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
+            { $inc: { seq: 1 } },
+            { new: true, upsert: true }
+          );
+          const pharmacyMedID = PREFIX_SEQUENCE.MEDICINES_SEQUENCE.SEQUENCE.concat(medCounter.seq);
+
+          const newMedicine = await new medicineModel({
+            medInventoryId: finalMedInventoryId || (inventory ? inventory._id : null),
+            medName,
+            quantity,
+            medicineType,
+            dosage,
+            duration,
+            timings: Array.isArray(timings) ? timings.join(", ") : timings,
+            frequency,
+            pharmacyMedID,
+            patientId: userId,
+            doctorId,
+            prescriptionId,
+            createdBy: req.headers.userid,
+            updatedBy: req.headers.userid,
+          }).save();
+
+          newMedications.push({
+            medInventoryId: newMedicine.medInventoryId ? newMedicine.medInventoryId.toString() : null,
+            medName: newMedicine.medName,
+            quantity: newMedicine.quantity,
+            medicineType: newMedicine.medicineType,
+            dosage: newMedicine.dosage,
+            duration: newMedicine.duration,
+            timings: newMedicine.timings ? newMedicine.timings.split(", ") : [],
+            frequency: newMedicine.frequency,
+          });
+        }
+      }
+
+      // Handle removal of medications
+      for (const existing of existingMedications) {
+        if (!sentMedNames.has(existing.medName)) {
+          if (existing.status === 'pending') {
+            existing.status = 'deleted'; // Set status to "deleted"
+            existing.isDeleted = true; // Keep for backward compatibility
+            existing.updatedBy = req.headers.userid;
+            await existing.save();
+          } else if (existing.status === 'completed') {
+            medicationWarnings.push({
+              medName: existing.medName,
+              message: `Cannot remove medication '${existing.medName}' because payment has been completed`,
+            });
+            newMedications.push({
+              medInventoryId: existing.medInventoryId ? existing.medInventoryId.toString() : null,
+              medName: existing.medName,
+              quantity: existing.quantity,
+              medicineType: existing.medicineType,
+              dosage: existing.dosage,
+              duration: existing.duration,
+              timings: existing.timings ? existing.timings.split(", ") : [],
+              frequency: existing.frequency,
+            });
+          } else {
+            console.log(`Cannot delete non-pending medication: ${existing.medName}`);
+            newMedications.push({
+              medInventoryId: existing.medInventoryId ? existing.medInventoryId.toString() : null,
+              medName: existing.medName,
+              quantity: existing.quantity,
+              medicineType: existing.medicineType,
+              dosage: existing.dosage,
+              duration: existing.duration,
+              timings: existing.timings ? existing.timings.split(", ") : [],
+              frequency: existing.frequency,
+            });
+          }
+        }
+      }
+    } else {
+      newMedications = existingMedications.map(ex => ({
+        medInventoryId: ex.medInventoryId ? ex.medInventoryId.toString() : null,
+        medName: ex.medName,
+        quantity: ex.quantity,
+        medicineType: ex.medicineType,
+        dosage: ex.dosage,
+        duration: ex.duration,
+        timings: ex.timings ? ex.timings.split(", ") : [],
+        frequency: ex.frequency,
+      }));
+    }
+
+    // Process tests
+    let newTests = [];
+    let testWarnings = [];
+    if (processTests) {
+      const sentTestNames = new Set(sentTests.map(t => t.testName));
+      const existingTestMap = new Map(existingTests.map(t => [t.testName, t]));
+
+      for (const test of sentTests) {
+        const { testInventoryId, testName } = test;
+        let existing = existingTestMap.get(testName);
+
+        if (existing) {
+          const testInvIdStr = testInventoryId ? testInventoryId : null;
+          const existingTestInvIdStr = existing.testInventoryId ? existing.testInventoryId.toString() : null;
+
+          if (existingTestInvIdStr !== testInvIdStr) {
+            if (existing.status === 'pending') {
+              let finalTestInventoryId = testInventoryId && mongoose.Types.ObjectId.isValid(testInventoryId)
+                ? new mongoose.Types.ObjectId(testInventoryId)
+                : null;
+
+              existing.testInventoryId = finalTestInventoryId;
+              existing.updatedBy = req.headers.userid;
+              await existing.save();
+            } else {
+              console.log(`Cannot update non-pending test: ${testName}`);
+            }
+          }
+
+          newTests.push({
+            testInventoryId: existing.testInventoryId ? existing.testInventoryId.toString() : null,
+            testName: existing.testName,
+          });
+        } else {
+          const testCounter = await Counter.findByIdAndUpdate(
+            { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
+            { $inc: { seq: 1 } },
+            { new: true, upsert: true }
+          );
+          const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(testCounter.seq);
+
+          let finalTestInventoryId = testInventoryId && mongoose.Types.ObjectId.isValid(testInventoryId)
+            ? new mongoose.Types.ObjectId(testInventoryId)
+            : null;
+
+          const newTest = await new patientTestModel({
+            testInventoryId: finalTestInventoryId,
+            testName,
+            patientId: userId,
+            prescriptionId,
+            labTestID,
+            doctorId,
+            createdBy:  req.user?._id,
+            updatedBy: req.user?._id,
+          }).save();
+
+          newTests.push({
+            testInventoryId: newTest.testInventoryId ? newTest.testInventoryId.toString() : null,
+            testName: newTest.testName,
+          });
+        }
+      }
+
+      // Handle removal of tests
+      for (const existing of existingTests) {
+        if (!sentTestNames.has(existing.testName)) {
+          if (existing.status === 'pending') {
+            existing.status = 'deleted'; // Set status to "deleted"
+            existing.isDeleted = true; // Keep for backward compatibility
+            existing.updatedBy =  req.user?._id;
+            await existing.save();
+          } else if (existing.status === 'completed') {
+            testWarnings.push({
+              testName: existing.testName,
+              message: `Cannot remove test '${existing.testName}' because payment has been completed`,
+            });
+            newTests.push({
+              testInventoryId: existing.testInventoryId ? existing.testInventoryId.toString() : null,
+              testName: existing.testName,
+            });
+          } else {
+            console.log(`Cannot delete non-pending test: ${existing.testName}`);
+            newTests.push({
+              testInventoryId: existing.testInventoryId ? existing.testInventoryId.toString() : null,
+              testName: existing.testName,
+            });
+          }
+        }
+      }
+    } else {
+      newTests = existingTests.map(ex => ({
+        testInventoryId: ex.testInventoryId ? ex.testInventoryId.toString() : null,
+        testName: ex.testName,
+      }));
+    }
+
+    // Create or update e-prescription document
+    if (!isNewPrescription) {
+      const updateData = {
+        userId,
+        doctorId,
+        addressId,
+        patientInfo: {
+          patientName: patientInfo?.patientName,
+          age: patientInfo?.age,
+          gender: patientInfo?.gender,
+          mobileNumber: patientInfo?.mobileNumber,
+          chiefComplaint: patientInfo?.chiefComplaint,
+          pastMedicalHistory: patientInfo?.pastMedicalHistory || null,
+          familyMedicalHistory: patientInfo?.familyMedicalHistory || null,
+          physicalExamination: patientInfo?.physicalExamination || null,
+        },
+        vitals: {
+          bp: vitals?.bp || null,
+          pulseRate: vitals?.pulseRate || null,
+          respiratoryRate: vitals?.respiratoryRate || null,
+          temperature: vitals?.temperature || null,
+          spo2: vitals?.spo2 || null,
+          height: vitals?.height || null,
+          weight: vitals?.weight || null,
+          bmi: vitals?.bmi || null,
+          investigationFindings: vitals?.investigationFindings || null,
+          other: vitals?.other || null,
+        },
+        advice: {
+          PrescribeMedNotes: advice?.PrescribeMedNotes || null,
+          advice: advice?.advice || null,
+          followUpDate: advice?.followUpDate || null,
+        },
+        updatedBy: req.headers.userid,
+        updatedAt: new Date(),
+      };
+
+      if (diagnosis) {
+        updateData.diagnosis = {
+          diagnosisNote: diagnosis.diagnosisNote || null,
+          testsNote: diagnosis.testsNote || null,
+          selectedTests: newTests,
+          medications: newMedications,
+        };
+      }
+
+      eprescription = await eprescriptionsModel.findOneAndUpdate(
+        { appointmentId },
+        updateData,
+        { new: true }
+      );
+    } else {
+      eprescription = new eprescriptionsModel({
+        prescriptionId,
+        appointmentId,
+        userId,
+        doctorId,
+        addressId,
+        patientInfo: {
+          patientName: patientInfo?.patientName,
+          age: patientInfo?.age,
+          gender: patientInfo?.gender,
+          mobileNumber: patientInfo?.mobileNumber,
+          chiefComplaint: patientInfo?.chiefComplaint,
+          pastMedicalHistory: patientInfo?.pastMedicalHistory || null,
+          familyMedicalHistory: patientInfo?.familyMedicalHistory || null,
+          physicalExamination: patientInfo?.physicalExamination || null,
+        },
+        vitals: {
+          bp: vitals?.bp || null,
+          pulseRate: vitals?.pulseRate || null,
+          respiratoryRate: vitals?.respiratoryRate || null,
+          temperature: vitals?.temperature || null,
+          spo2: vitals?.spo2 || null,
+          height: vitals?.height || null,
+          weight: vitals?.weight || null,
+          bmi: vitals?.bmi || null,
+          investigationFindings: vitals?.investigationFindings || null,
+          other: vitals?.other || null,
+        },
+        diagnosis: diagnosis
+          ? {
+              diagnosisNote: diagnosis.diagnosisNote || null,
+              testsNote: diagnosis.testsNote || null,
+              selectedTests: newTests,
+              medications: newMedications,
+            }
+          : null,
+        advice: {
+          PrescribeMedNotes: advice?.PrescribeMedNotes || null,
+          advice: advice?.advice || null,
+          followUpDate: advice?.followUpDate || null,
+        },
+        createdBy: req.headers.userid,
+        updatedBy: req.headers.userid,
+      });
+      await eprescription.save();
+    }
+
+    // Prepare response with warnings
+    res.status(201).json({
+      success: true,
+      prescriptionId: eprescription.prescriptionId,
+      message: isNewPrescription
+        ? "Prescription added successfully"
+        : "Prescription updated successfully",
+      data: {
+        skippedTests: diagnosis?.selectedTests
+          ? diagnosis.selectedTests.filter((test) =>
+              existingTests.some((existing) => existing.testName === test.testName)
+            )
+          : [],
+        skippedMedications: diagnosis?.medications
+          ? diagnosis.medications.filter((med) =>
+              existingMedications.some(
+                (existing) =>
+                  existing.medName === med.medName &&
+                  existing.dosage === med.dosage &&
+                  existing.duration === med.duration &&
+                  existing.frequency === med.frequency &&
+                  existing.timings === (Array.isArray(med.timings) ? med.timings.join(", ") : med.timings)
+              )
+            )
+          : [],
+        warnings: [...testWarnings, ...medicationWarnings],
+      },
+    });
+  } catch (error) {
+    console.log("error", error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Duplicate prescription, test, or medication entry detected",
+      });
+    }
+
+    res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error",
+    });
+  }
+};
+
+//checking medicine nme, dosage for duplicates
+exports.addPrescription = async (req, res) => {
+  try {
+    const { error, value } = prescriptionValidationSchema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      const errorMessages = error.details.map((detail) => detail.message);
+      return res.status(400).json({
+        status: "fail",
+        message: "Validation failed",
+        errors: errorMessages,
+      });
+    }
+
+    const {
+      userId,
+      doctorId,
+      appointmentId,
+      addressId,
+      patientInfo,
+      vitals,
+      diagnosis,
+      advice,
+    } = value;
+
+    // Check if prescription exists for this appointment
+    let eprescription = await eprescriptionsModel.findOne({ appointmentId });
+    let isNewPrescription = !eprescription;
+
+    let prescriptionId;
+    if (isNewPrescription) {
+      console.log("No existing prescription found, creating a new one");
+      const prescriptionCounter = await Counter.findByIdAndUpdate(
+        { _id: PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.EPRESCRIPTION_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      prescriptionId = PREFIX_SEQUENCE.EPRESCRIPTION_SEQUENCE.SEQUENCE.concat(
+        prescriptionCounter.seq
+      );
+    } else {
+      prescriptionId = eprescription.prescriptionId;
+    }
+
+    // Fetch existing tests and medications
+    const existingTests = await patientTestModel.find({
+      patientId: userId,
+      doctorId,
+      prescriptionId,
+      isDeleted: false,
+      status: { $nin: ['cancelled', 'deleted'] },
+    });
+
+    const existingMedications = await medicineModel.find({
+      patientId: userId,
+      doctorId,
+      prescriptionId,
+      isDeleted: false,
+      status: { $nin: ['cancelled', 'deleted'] },
+    });
+
+    // Determine if we need to process medications and tests
+    const processMedications = diagnosis && 'medications' in diagnosis;
+    const processTests = diagnosis && 'selectedTests' in diagnosis;
+
+    const sentMedications = processMedications ? (diagnosis.medications || []) : [];
+    const sentTests = processTests ? (diagnosis.selectedTests || []) : [];
+
+    // Process medications
+    let newMedications = [];
+    let medicationWarnings = [];
+    if (processMedications) {
+      // Trim medName and normalize case for comparison
+      const sentMedKeys = new Set(
+        sentMedications.map(m => `${m.medName.trim().toLowerCase()}|${m.dosage.trim().toLowerCase()}`)
+      );
+      const existingMedMap = new Map(
+        existingMedications.map(m => [`${m.medName.trim().toLowerCase()}|${m.dosage.trim().toLowerCase()}`, m])
+      );
+
+      for (const medicine of sentMedications) {
+        const {
+          medInventoryId,
+          medName: rawMedName,
+          dosage,
+          quantity,
+          medicineType,
+          duration,
+          timings,
+          frequency,
+        } = medicine;
+
+        // Trim and normalize medName
+        const medName = rawMedName.trim();
+        const medKey = `${medName.toLowerCase()}|${dosage.trim().toLowerCase()}`;
+        let existing = existingMedMap.get(medKey);
+
+        if (existing) {
+          const timingsStr = Array.isArray(timings) ? timings.join(", ") : timings;
+          const medInvIdStr = medInventoryId ? medInventoryId : null;
+          const existingMedInvIdStr = existing.medInventoryId ? existing.medInventoryId.toString() : null;
+
+          if (
+            existing.quantity !== quantity ||
+            existing.medicineType !== medicineType ||
+            existing.dosage !== dosage ||
+            existing.duration !== duration ||
+            existing.timings !== timingsStr ||
+            existing.frequency !== frequency ||
+            existingMedInvIdStr !== medInvIdStr
+          ) {
+            if (existing.status === 'pending') {
+              let finalMedInventoryId = medInventoryId && mongoose.Types.ObjectId.isValid(medInventoryId)
+                ? new mongoose.Types.ObjectId(medInventoryId)
+                : null;
+
+              existing.medInventoryId = finalMedInventoryId;
+              existing.quantity = quantity;
+              existing.medicineType = medicineType;
+              existing.dosage = dosage;
+              existing.duration = duration;
+              existing.timings = timingsStr;
+              existing.frequency = frequency;
+              existing.updatedBy = req.headers.userid;
+              await existing.save();
+            } else {
+              console.log(`Cannot update non-pending medication: ${medName} (${dosage})`);
+            }
+          }
+
+          newMedications.push({
+            medInventoryId: existing.medInventoryId ? existing.medInventoryId.toString() : null,
+            medName: existing.medName,
+            dosage: existing.dosage,
+            quantity: existing.quantity,
+            medicineType: existing.medicineType,
+            duration: existing.duration,
+            timings: existing.timings ? existing.timings.split(", ") : [],
+            frequency: existing.frequency,
+          });
+        } else {
+          let finalMedInventoryId = medInventoryId && mongoose.Types.ObjectId.isValid(medInventoryId)
+            ? new mongoose.Types.ObjectId(medInventoryId)
+            : null;
+
+          let inventory = await medInventoryModel.findOne({
+            medName: { $regex: `^${medName}$`, $options: "i" },
+            dosage: { $regex: `^${dosage}$`, $options: "i" },
+            doctorId,
+          });
+          if (!inventory && medInventoryId) {
+            inventory = await medInventoryModel.findById(medInventoryId);
+          }
+
+          const medCounter = await Counter.findByIdAndUpdate(
+            { _id: PREFIX_SEQUENCE.MEDICINES_SEQUENCE.MEDICINES_MODEL },
+            { $inc: { seq: 1 } },
+            { new: true, upsert: true }
+          );
+          const pharmacyMedID = PREFIX_SEQUENCE.MEDICINES_SEQUENCE.SEQUENCE.concat(medCounter.seq);
+
+          const newMedicine = await new medicineModel({
+            medInventoryId: finalMedInventoryId || (inventory ? inventory._id : null),
+            medName,
+            dosage,
+            quantity,
+            medicineType,
+            duration,
+            timings: Array.isArray(timings) ? timings.join(", ") : timings,
+            frequency,
+            pharmacyMedID,
+            patientId: userId,
+            doctorId,
+            prescriptionId,
+            createdBy: req.headers.userid,
+            updatedBy: req.headers.userid,
+          }).save();
+
+          newMedications.push({
+            medInventoryId: newMedicine.medInventoryId ? newMedicine.medInventoryId.toString() : null,
+            medName: newMedicine.medName,
+            dosage: newMedicine.dosage,
+            quantity: newMedicine.quantity,
+            medicineType: newMedicine.medicineType,
+            duration: newMedicine.duration,
+            timings: newMedicine.timings ? newMedicine.timings.split(", ") : [],
+            frequency: newMedicine.frequency,
+          });
+        }
+      }
+
+      // Handle removal of medications
+      for (const existing of existingMedications) {
+        const existingMedKey = `${existing.medName.trim().toLowerCase()}|${existing.dosage.trim().toLowerCase()}`;
+        if (!sentMedKeys.has(existingMedKey)) {
+          if (existing.status === 'pending') {
+            existing.status = 'deleted';
+            existing.isDeleted = true;
+            existing.updatedBy = req.headers.userid;
+            await existing.save();
+          } else if (existing.status === 'completed') {
+            medicationWarnings.push({
+              medName: existing.medName,
+              dosage: existing.dosage,
+              message: `Cannot remove medication '${existing.medName} (${existing.dosage})' because payment has been completed`,
+            });
+            newMedications.push({
+              medInventoryId: existing.medInventoryId ? existing.medInventoryId.toString() : null,
+              medName: existing.medName,
+              dosage: existing.dosage,
+              quantity: existing.quantity,
+              medicineType: existing.medicineType,
+              duration: existing.duration,
+              timings: existing.timings ? existing.timings.split(", ") : [],
+              frequency: existing.frequency,
+            });
+          } else {
+            console.log(`Cannot delete non-pending medication: ${existing.medName} (${existing.dosage})`);
+            newMedications.push({
+              medInventoryId: existing.medInventoryId ? existing.medInventoryId.toString() : null,
+              medName: existing.medName,
+              dosage: existing.dosage,
+              quantity: existing.quantity,
+              medicineType: existing.medicineType,
+              duration: existing.duration,
+              timings: existing.timings ? existing.timings.split(", ") : [],
+              frequency: existing.frequency,
+            });
+          }
+        }
+      }
+    } else {
+      newMedications = existingMedications.map(ex => ({
+        medInventoryId: ex.medInventoryId ? ex.medInventoryId.toString() : null,
+        medName: ex.medName,
+        dosage: ex.dosage,
+        quantity: ex.quantity,
+        medicineType: ex.medicineType,
+        duration: ex.duration,
+        timings: ex.timings ? ex.timings.split(", ") : [],
+        frequency: ex.frequency,
+      }));
+    }
+
+    // Process tests (unchanged)
+    let newTests = [];
+    let testWarnings = [];
+    if (processTests) {
+      const sentTestNames = new Set(sentTests.map(t => t.testName));
+      const existingTestMap = new Map(existingTests.map(t => [t.testName, t]));
+
+      for (const test of sentTests) {
+        const { testInventoryId, testName } = test;
+        let existing = existingTestMap.get(testName);
+
+        if (existing) {
+          const testInvIdStr = testInventoryId ? testInventoryId : null;
+          const existingTestInvIdStr = existing.testInventoryId ? existing.testInventoryId.toString() : null;
+
+          if (existingTestInvIdStr !== testInvIdStr) {
+            if (existing.status === 'pending') {
+              let finalTestInventoryId = testInventoryId && mongoose.Types.ObjectId.isValid(testInventoryId)
+                ? new mongoose.Types.ObjectId(testInventoryId)
+                : null;
+
+              existing.testInventoryId = finalTestInventoryId;
+              existing.updatedBy = req.headers.userid;
+              await existing.save();
+            } else {
+              console.log(`Cannot update non-pending test: ${testName}`);
+            }
+          }
+
+          newTests.push({
+            testInventoryId: existing.testInventoryId ? existing.testInventoryId.toString() : null,
+            testName: existing.testName,
+          });
+        } else {
+          const testCounter = await Counter.findByIdAndUpdate(
+            { _id: PREFIX_SEQUENCE.TESTS_SEQUENCE.TESTS_MODEL },
+            { $inc: { seq: 1 } },
+            { new: true, upsert: true }
+          );
+          const labTestID = PREFIX_SEQUENCE.TESTS_SEQUENCE.SEQUENCE.concat(testCounter.seq);
+
+          let finalTestInventoryId = testInventoryId && mongoose.Types.ObjectId.isValid(testInventoryId)
+            ? new mongoose.Types.ObjectId(testInventoryId)
+            : null;
+
+          const newTest = await new patientTestModel({
+            testInventoryId: finalTestInventoryId,
+            testName,
+            patientId: userId,
+            prescriptionId,
+            labTestID,
+            doctorId,
+            createdBy: req.user?._id,
+            updatedBy: req.user?._id,
+          }).save();
+
+          newTests.push({
+            testInventoryId: newTest.testInventoryId ? newTest.testInventoryId.toString() : null,
+            testName: newTest.testName,
+          });
+        }
+      }
+
+      // Handle removal of tests
+      for (const existing of existingTests) {
+        if (!sentTestNames.has(existing.testName)) {
+          if (existing.status === 'pending') {
+            existing.status = 'deleted';
+            existing.isDeleted = true;
+            existing.updatedBy = req.user?._id;
+            await existing.save();
+          } else if (existing.status === 'completed') {
+            testWarnings.push({
+              testName: existing.testName,
+              message: `Cannot remove test '${existing.testName}' because payment has been completed`,
+            });
+            newTests.push({
+              testInventoryId: existing.testInventoryId ? existing.testInventoryId.toString() : null,
+              testName: existing.testName,
+            });
+          } else {
+            console.log(`Cannot delete non-pending test: ${existing.testName}`);
+            newTests.push({
+              testInventoryId: existing.testInventoryId ? existing.testInventoryId.toString() : null,
+              testName: existing.testName,
+            });
+          }
+        }
+      }
+    } else {
+      newTests = existingTests.map(ex => ({
+        testInventoryId: ex.testInventoryId ? ex.testInventoryId.toString() : null,
+        testName: ex.testName,
+      }));
+    }
+
+    // Create or update e-prescription document
+    if (!isNewPrescription) {
+      const updateData = {
+        userId,
+        doctorId,
+        addressId,
+        patientInfo: {
+          patientName: patientInfo?.patientName,
+          age: patientInfo?.age,
+          gender: patientInfo?.gender,
+          mobileNumber: patientInfo?.mobileNumber,
+          chiefComplaint: patientInfo?.chiefComplaint,
+          pastMedicalHistory: patientInfo?.pastMedicalHistory || null,
+          familyMedicalHistory: patientInfo?.familyMedicalHistory || null,
+          physicalExamination: patientInfo?.physicalExamination || null,
+        },
+        vitals: {
+          bp: vitals?.bp || null,
+          pulseRate: vitals?.pulseRate || null,
+          respiratoryRate: vitals?.respiratoryRate || null,
+          temperature: vitals?.temperature || null,
+          spo2: vitals?.spo2 || null,
+          height: vitals?.height || null,
+          weight: vitals?.weight || null,
+          bmi: vitals?.bmi || null,
+          investigationFindings: vitals?.investigationFindings || null,
+          other: vitals?.other || null,
+        },
+        advice: {
+          PrescribeMedNotes: advice?.PrescribeMedNotes || null,
+          advice: advice?.advice || null,
+          followUpDate: advice?.followUpDate || null,
+        },
+        updatedBy: req.headers.userid,
+        updatedAt: new Date(),
+      };
+
+      if (diagnosis) {
+        updateData.diagnosis = {
+          diagnosisNote: diagnosis.diagnosisNote || null,
+          testsNote: diagnosis.testsNote || null,
+          selectedTests: newTests,
+          medications: newMedications,
+        };
+      }
+
+      eprescription = await eprescriptionsModel.findOneAndUpdate(
+        { appointmentId },
+        updateData,
+        { new: true }
+      );
+    } else {
+      eprescription = new eprescriptionsModel({
+        prescriptionId,
+        appointmentId,
+        userId,
+        doctorId,
+        addressId,
+        patientInfo: {
+          patientName: patientInfo?.patientName,
+          age: patientInfo?.age,
+          gender: patientInfo?.gender,
+          mobileNumber: patientInfo?.mobileNumber,
+          chiefComplaint: patientInfo?.chiefComplaint,
+          pastMedicalHistory: patientInfo?.pastMedicalHistory || null,
+          familyMedicalHistory: patientInfo?.familyMedicalHistory || null,
+          physicalExamination: patientInfo?.physicalExamination || null,
+        },
+        vitals: {
+          bp: vitals?.bp || null,
+          pulseRate: vitals?.pulseRate || null,
+          respiratoryRate: vitals?.respiratoryRate || null,
+          temperature: vitals?.temperature || null,
+          spo2: vitals?.spo2 || null,
+          height: vitals?.height || null,
+          weight: vitals?.weight || null,
+          bmi: vitals?.bmi || null,
+          investigationFindings: vitals?.investigationFindings || null,
+          other: vitals?.other || null,
+        },
+        diagnosis: diagnosis
+          ? {
+              diagnosisNote: diagnosis.diagnosisNote || null,
+              testsNote: diagnosis.testsNote || null,
+              selectedTests: newTests,
+              medications: newMedications,
+            }
+          : null,
+        advice: {
+          PrescribeMedNotes: advice?.PrescribeMedNotes || null,
+          advice: advice?.advice || null,
+          followUpDate: advice?.followUpDate || null,
+        },
+        createdBy: req.headers.userid,
+        updatedBy: req.headers.userid,
+      });
+      await eprescription.save();
+    }
+
+    // Prepare response with warnings
+    res.status(201).json({
+      success: true,
+      prescriptionId: eprescription.prescriptionId,
+      message: isNewPrescription
+        ? "Prescription added successfully"
+        : "Prescription updated successfully",
+      data: {
+        skippedTests: diagnosis?.selectedTests
+          ? diagnosis.selectedTests.filter((test) =>
+              existingTests.some((existing) => existing.testName === test.testName)
+            )
+          : [],
+        skippedMedications: diagnosis?.medications
+          ? diagnosis.medications.map(med => ({
+              ...med,
+              medName: med.medName.trim(), // Trim in response
+            })).filter((med) =>
+              existingMedications.some(
+                (existing) =>
+                  existing.medName.trim().toLowerCase() === med.medName.trim().toLowerCase() &&
+                  existing.dosage.trim().toLowerCase() === med.dosage.trim().toLowerCase() &&
+                  existing.quantity === med.quantity &&
+                  existing.medicineType === med.medicineType &&
+                  existing.duration === med.duration &&
+                  existing.frequency === med.frequency &&
+                  existing.timings === (Array.isArray(med.timings) ? med.timings.join(", ") : med.timings)
+              )
+            )
+          : [],
+        warnings: [...testWarnings, ...medicationWarnings],
       },
     });
   } catch (error) {
