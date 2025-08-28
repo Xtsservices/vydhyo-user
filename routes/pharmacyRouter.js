@@ -13,7 +13,8 @@ router.post("/addMedInventory", addMedInventory);
 router.post("/addMedInventory/bulk", addMedInventoryBulk);
 
 // router.post("/addattachprescription", upload.single("file"),addattach);
-router.post("/addattachprescription", upload.single("file"),addattach);
+// router.post("/addattachprescription", upload.single("file"),addattach);
+router.post("/addattachprescription",addattach);
 
 router.post('/addPrescription', addPrescription);
 router.get('/getEPrescriptionByPatientId/:patientId', getEPrescriptionByPatientId);
