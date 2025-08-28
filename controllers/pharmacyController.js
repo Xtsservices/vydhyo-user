@@ -30,7 +30,6 @@ const {
   fetchPrescriptionFromDatabase,
   uploadAttachmentToS3,
 } = require("../utils/attachmentService");
-
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const {
   S3Client,
@@ -55,6 +54,10 @@ const { unlink } = require('fs').promises;
 const path = require('path')
 const FormData = require('form-data');
 const { waitForDebugger } = require("inspector");
+const {generatePrescriptionPDF} = require("../utils/generatePdf")
+
+
+// const { convertImageToBase64 } = require("../utils/imageService");
 // const { fromFile } = require('file-type');
 // import fs from 'fs';
 // import path from 'path';
@@ -290,7 +293,7 @@ exports.addMedInventoryBulk = [
 ];
 
 
-exports.addattach = async (req, res) => {
+exports.addattach2= async (req, res) => {
   console.log("am in 0=====")
   let fileDeleted = false; // Track if file was deleted
 
@@ -378,6 +381,82 @@ console.log("Error in addattach:", error);
   }
 };
 
+
+exports.addattach = async (req, res) => {
+  console.log("am in 0=====");
+  let fileDeleted = false;
+
+  try {
+    const { formData, selectedClinic } = req.body;
+
+    if (!formData || !selectedClinic) {
+      return res.status(400).json({ error: "formData or selectedClinic is missing" });
+    }
+
+    const { prescriptionId } = formData;
+    if (!prescriptionId) {
+      return res.status(400).json({ error: "Prescription ID is missing" });
+    }
+
+    // console.log("Generating PDF...");
+    // console.log("formData:", JSON.stringify(formData, null, 2));
+    // console.log("selectedClinic:", JSON.stringify(selectedClinic, null, 2));
+
+    // Generate PDF
+    const pdfBuffer = await generatePrescriptionPDF(formData, selectedClinic);
+    if (!pdfBuffer) throw new Error("Failed to generate PDF");
+
+    // Ensure tmp folder exists
+    const tmpDir = path.join(__dirname, "../tmp");
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    // Save PDF temporarily
+    const tempFilePath = path.join(tmpDir, `prescription_${prescriptionId}_${Date.now()}.pdf`);
+    await fs.promises.writeFile(tempFilePath, pdfBuffer);
+    console.log("PDF saved to:", tempFilePath);
+
+    // Upload file to Airtel API
+    const whatsappMediaID = await this.uploadImageToAirtelAPI(tempFilePath);
+    console.log("Uploaded to Airtel:", whatsappMediaID);
+
+    // Send WhatsApp message
+    await this.sendWhatsQrAppMessage(req.body, whatsappMediaID);
+
+    // Cleanup
+    await unlink(tempFilePath);
+    fileDeleted = true;
+    console.log("Temporary file deleted");
+
+    res.status(200).json({
+      message: "Attachment uploaded successfully"
+    });
+
+  } catch (error) {
+    // Cleanup req.file if exists
+    if (!fileDeleted && req.file && req.file.path) {
+      try {
+        await unlink(req.file.path);
+      } catch (cleanupError) {
+        console.error("Error cleaning up file:", cleanupError);
+      }
+    }
+    console.error("Error in addattach:", error);
+    res.status(500).json({
+      error: "Failed to upload attachment",
+      details: error.message
+    });
+  }
+};
+
+
+
+
+
+
+
+
 exports.uploadImageToAirtelAPI = async (filePath) => {
   const url = 'https://iqwhatsapp.airtel.in:443/gateway/airtel-xchange/whatsapp-content-manager/v1/media';
   const username = 'world_tek'; 
@@ -401,7 +480,7 @@ exports.uploadImageToAirtelAPI = async (filePath) => {
   ? filePath
   : path.join(__dirname, '..', filePath);
 
-    console.log("Resolved PDF path:", pdfFilePath);
+    // console.log("Resolved PDF path:", pdfFilePath);
 
     if (!fs.existsSync(pdfFilePath)) {
       throw new Error(`❌ File not found: ${pdfFilePath}`);
@@ -475,26 +554,23 @@ exports.uploadImageToAirtelAPI = async (filePath) => {
 
 
 exports.sendWhatsQrAppMessage = async (order, whatsappuploadedid) => {
-  console.log("order==",order)
-  const userId = order.patientId; // Extract userId from the order object
-  const doctorId = order.doctorId; // Extract doctorId from the order object
-  console.log("userId====",userId)
-  const user = await User.findOne({ userId: userId });
-  const doctor = await User.findOne({ userId: doctorId });
+  const userId = order?.patientId; // Extract userId from the order object
+  const doctorId = order?.doctorId; // Extract doctorId from the order object
+  const user = order?.formData?.patientInfo;
+  const doctor = order?.formData?.doctorInfo;
 
-  const phoneNumber =   user?.mobile; // Get the phone number from the user details
-console.log("user====",user)
-  const name =
-    user?.firstname && user?.lastname
-      ? `${user.firstname} ${user.lastname}`
-      : "User"; // Default to 'User' if name doesn't exist
+  const phoneNumber =   user?.mobileNumber; // Get the phone number from the user details
+  const name = user?.patientName? user.patientName: "User"; // Default to 'User' if name doesn't exist
 
   // let OrderNo = "NV".concat(order.id.toString());
   let toNumber = "91".concat(phoneNumber);
 
-
- const doctorfirstname = doctor?.firstname || "Doctor";
-    const doctorlastname = doctor?.lastname || "Unknown";
+const doctorName = doctor?.doctorName || "Doctor Unknown";
+// split by space
+const [firstname, lastname] = doctorName.split(" ");
+// fallback if only one name exists
+const doctorfirstname = firstname || "Doctor";
+const doctorlastname = lastname || "Unknown";
 
     sendImageWithAttachment(
       toNumber,
