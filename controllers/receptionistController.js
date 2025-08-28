@@ -2658,6 +2658,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
           medicineId: m._id,
           pharmacyMedID: m.pharmacyMedID,
           medName: m.medName,
+          dosage: m.dosage,
           quantity: m.quantity,
           gst: m.medInventory?.gst ?? 6,
           cgst: m.medInventory?.cgst ?? 6,
