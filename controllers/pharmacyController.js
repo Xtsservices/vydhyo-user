@@ -1979,7 +1979,7 @@ exports.addPrescription = async (req, res) => {
                 : null;
 
               existing.testInventoryId = finalTestInventoryId;
-              existing.updatedBy = req.headers.userid;
+              existing.updatedBy =  req.user?._id;
               await existing.save();
             } else {
               console.log(`Cannot update non-pending test: ${testName}`);
