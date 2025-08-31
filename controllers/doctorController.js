@@ -650,7 +650,7 @@ exports.updatePatientFromPatientApp = async (req, res) => {
       { userId, role: "patient", isDeleted: false },
       { $set: updateData },
       { new: true, runValidators: true }
-    ).select('userId firstname lastname email mobile gender DOB age relationship familyProvider ');
+    ).select('userId firstname lastname email mobile gender DOB age relationship familyProvider usedReferralCode ');
 
     if (!user) {
       return res.status(404).json({
