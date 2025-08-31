@@ -1162,7 +1162,7 @@ const { familyProvider } = req.params;
       });
     }
     // Step 1: Fetch  All patients in family group
-    const users = await Users.find({ familyProvider: familyProvider }).select('userId');
+    const users = await Users.find({ familyProvider: familyProvider }).select('userId firstname lastname');
     const userIds = users.map(user => user.userId);
     if (userIds.length === 0) {
       return res.status(200).json({
