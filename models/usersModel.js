@@ -139,7 +139,13 @@ const userSchema = new mongoose.Schema({
     referredBy: {  
       type: String,
      default: null
-     }
+     },
+     usedReferralCode: { type: String }, 
+  usedReferralCodeStatus: {
+    type: String,
+    enum: ["pending", "applied", "invalid", "expired", "alreadyUsed"],
+    default: "pending"
+  }
 
 });
 
