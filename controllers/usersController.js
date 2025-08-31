@@ -219,6 +219,7 @@ exports.getUserById = async (req, res) => {
 
     // Process addresses to include pre-signed S3 URLs
     const userData = user[0];
+    // console.log("User Data:", userData);
      /** ------------------  Handle Bank Details ------------------ */
     if (userData.bankDetails) {
       try {

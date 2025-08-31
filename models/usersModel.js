@@ -140,7 +140,7 @@ const userSchema = new mongoose.Schema({
       type: String,
      default: null
      },
-     usedReferralCode: { type: String }, 
+     usedReferralCode: { type: String ,default: null}, 
   usedReferralCodeStatus: {
     type: String,
     enum: ["pending", "applied", "invalid", "expired", "alreadyUsed"],
