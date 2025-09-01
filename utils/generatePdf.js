@@ -438,7 +438,7 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
                   : selectedClinic
                   ? `
                     ${
-                     selectedClinic.clinicName &&
+                      selectedClinic.clinicName &&
                       selectedClinic.clinicName !== "Clinic Name"
                         ? `<div class="clinic-info">
                              <div class="clinic-name">${
@@ -954,6 +954,8 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
       </html>
     `;
 
+
+
     // Configure options for html-pdf-node
     const options = {
       format: "A4",
@@ -965,6 +967,15 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
       },
       printBackground: true,
       preferCSSPageSize: true,
+      args: [
+        "--no-sandbox",
+
+        "--disable-setuid-sandbox",
+
+        "--disable-dev-shm-usage",
+
+        "--disable-gpu",
+      ],
     };
 
     // Generate PDF using html-pdf-node
