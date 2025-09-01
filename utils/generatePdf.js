@@ -954,8 +954,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
       </html>
     `;
 
-
-
     // Configure options for html-pdf-node
     const options = {
       format: "A4",
