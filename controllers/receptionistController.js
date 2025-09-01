@@ -143,7 +143,7 @@ exports.fetchMyDoctors = async (req, res) => {
   }
 };
 
-//this api contain full patirnt details with address details (master)
+// TODO: this api contain full patirnt details with address details (master)
 exports.fetchMyDoctorPatients0 = async (req, res) => {
   try {
     const doctorId = req.params.doctorId || req.headers.userid;
