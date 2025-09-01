@@ -566,11 +566,20 @@ exports.sendWhatsQrAppMessage = async (order, whatsappuploadedid) => {
   let toNumber = "91".concat(phoneNumber);
 
 const doctorName = doctor?.doctorName || "Doctor Unknown";
-// split by space
-const [firstname, lastname] = doctorName.split(" ");
+
+// Split by ANY whitespace and remove empties
+const parts = doctorName.trim().split(/\s+/);
+
+const firstname = parts[0] || "";
+const lastname = parts.slice(1).join(" ") || ""; // handles multiple last names too
+
+// console.log("doctorName:", doctorName);
+// console.log("Doctor Firstname:", firstname);
+// console.log("Doctor Lastname:", lastname);
+
 // fallback if only one name exists
 const doctorfirstname = firstname || "Doctor";
-const doctorlastname = lastname || "Unknown";
+const doctorlastname = lastname || ""
 
     sendImageWithAttachment(
       toNumber,

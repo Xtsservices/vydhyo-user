@@ -1,4 +1,4 @@
-const puppeteer = require("puppeteer");
+const html_to_pdf = require("html-pdf-node");
 
 // Helper function to format date
 const formatDate = (dateString) => {
@@ -14,11 +14,7 @@ const formatDate = (dateString) => {
 // Helper function to generate PDF
 async function generatePrescriptionPDF(formData, selectedClinic) {
   try {
-    // Launch Puppeteer
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-
-    // Generate HTML content with enhanced styling
+    // Generate HTML content with enhanced styling (same as provided)
     const htmlContent = `
       <html>
         <head>
@@ -44,25 +40,23 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               position: relative;
             }
 
-           /* Header Styles */
-.prescription-header {
-  border-bottom: 3px solid #3b82f6;
-  padding-bottom: 20px;
-  margin-bottom: 15px;
-  position: relative;
-  width: 100%;
-  padding: 0; /* remove extra padding */
-  margin: 0;  /* reset weird negative margins */
-}
+            .prescription-header {
+              border-bottom: 3px solid #3b82f6;
+              padding-bottom: 20px;
+              margin-bottom: 15px;
+              position: relative;
+              width: 100%;
+              padding: 0;
+              margin: 0;
+            }
 
-.prescription-header img {
-  width: 95%;          /* take full width minus 5% left + 5% right */
-  height: 40mm;        /* controlled height */
-  margin: 3%;          /* 5% margin on all sides */
-  object-fit: cover;   /* keep banner effect, fills width nicely */
-  display: block;
-}
-
+            .prescription-header img {
+              width: 95%;
+              height: 40mm;
+              margin: 3%;
+              object-fit: cover;
+              display: block;
+            }
 
             .clinic-info {
               text-align: center;
@@ -93,7 +87,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               gap: 5px;
             }
 
-            /* Doctor and Patient Info */
             .info-section {
               display: flex;
               justify-content: space-between;
@@ -155,7 +148,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               margin-bottom: 4px;
             }
 
-            /* Appointment Info */
             .appointment-info {
               display: flex;
               justify-content: space-between;
@@ -175,7 +167,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               font-weight: 500;
             }
 
-            /* Section Styles */
             .prescription-section {
               margin-bottom: 15px;
               background: white;
@@ -200,7 +191,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               padding: 20px;
             }
 
-            /* History Section */
             .detail-item {
               margin-bottom: 12px;
               padding: 10px 0;
@@ -223,7 +213,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               line-height: 1.6;
             }
 
-            /* Vitals Section */
             .vitals-grid {
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -252,7 +241,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               color: #1f2937;
             }
 
-            /* Tests Section */
             .investigation-grid {
               display: grid;
               grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -268,7 +256,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               color: #92400e;
             }
 
-            /* Diagnosis Section */
             .diagnosis-tags {
               display: flex;
               flex-wrap: wrap;
@@ -287,7 +274,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
 
-            /* Medication Table */
             .medication-table {
               width: 100%;
               border-collapse: collapse;
@@ -327,7 +313,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               background: #f3f4f6;
             }
 
-            /* Advice Section */
             .advice-list {
               list-style: none;
               padding: 0;
@@ -347,7 +332,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               font-size: 16px;
             }
 
-            /* Follow-up Section */
             .follow-up-container {
               background: #ecfdf5;
               border: 2px solid #10b981;
@@ -362,7 +346,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               color: #047857;
             }
 
-            /* Notes */
             .notes-display {
               margin-top: 15px;
               background: #fffbeb;
@@ -383,7 +366,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               line-height: 1.6;
             }
 
-            /* Signature Section */
             .signature {
               margin-top: 20px;
               text-align: right;
@@ -409,7 +391,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               font-weight: 500;
             }
 
-            /* Footer */
             .prescription-footer {
               margin-top: 20px;
               padding-top: 20px;
@@ -420,7 +401,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               font-style: italic;
             }
 
-            /* Watermark */
             .watermark {
               position: absolute;
               top: 50%;
@@ -433,7 +413,6 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
               pointer-events: none;
             }
 
-            /* Print optimizations */
             @media print {
               .prescription-container {
                 box-shadow: none;
@@ -975,31 +954,33 @@ async function generatePrescriptionPDF(formData, selectedClinic) {
       </html>
     `;
 
-    // Set the HTML content with better PDF settings
-    await page.setContent(htmlContent, {
-      waitUntil: ["networkidle0", "domcontentloaded"],
-      timeout: 30000,
-    });
-
-    // Wait for fonts to load
-    await page.evaluateHandle("document.fonts.ready");
-
-    // Generate PDF with optimized settings
-    const pdfBuffer = await page.pdf({
+    // Configure options for html-pdf-node
+    const options = {
       format: "A4",
-      printBackground: true,
       margin: {
         top: "0mm",
         right: "0mm",
         bottom: "0mm",
         left: "0mm",
       },
+      printBackground: true,
       preferCSSPageSize: true,
-      displayHeaderFooter: false,
-    });
+      args: [
+        "--no-sandbox",
 
-    // Close the browser
-    await browser.close();
+        "--disable-setuid-sandbox",
+
+        "--disable-dev-shm-usage",
+
+        "--disable-gpu",
+      ],
+    };
+
+    // Generate PDF using html-pdf-node
+    const pdfBuffer = await html_to_pdf.generatePdf(
+      { content: htmlContent },
+      options
+    );
 
     // Return the PDF buffer
     return pdfBuffer;
