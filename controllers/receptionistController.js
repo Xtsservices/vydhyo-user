@@ -601,7 +601,7 @@ exports.fetchMyDoctorPatients = async (req, res) => {
 
 // ==================== API 2: Patient Details ====================
 
-exports.fetchDoctorPatientDetails = async (req, res) => {
+exports.fetchDoctorPatientDetails2 = async (req, res) => {
   try {
     const { doctorId, patientId, prescriptionId } = req.params;
 
@@ -709,6 +709,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
         },
         { $unwind: { path: "$testInventory", preserveNullAndEmptyArrays: true } },
       ]),
+
       Medicine.aggregate([
         { $match: { patientId, doctorId, prescriptionId, isDeleted: false } },
         {
@@ -723,6 +724,8 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
       ]),
     ]);
 
+    console.log("testsAgg",testsAgg)
+    console.log("medicinesAgg",medicinesAgg)
     // Fetch payments
     let payments = [];
     try {
@@ -752,6 +755,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
           createdAt: t.createdAt,
           updatedAt: t.updatedAt,
         }));
+        console.log("appointmentTests",appointmentTests)
 
       // Medicines without repeating pharmacyDetails
       const appointmentMedicines = medicinesAgg
@@ -769,7 +773,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
           createdAt: m.createdAt,
           updatedAt: m.updatedAt,
         }));
-
+console.log("appointmentMedicines",appointmentMedicines)
       // Extract labDetails only once
       let labDetails = null;
       if (appointmentTests.length > 0 && addressInfo) {
@@ -854,7 +858,316 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
 };
 
 
+exports.fetchDoctorPatientDetails = async (req, res) => {
+  try {
+    const { doctorId, patientId, prescriptionId } = req.params;
 
+    if (!doctorId || !patientId) {
+      return res.status(400).json({ error: "Invalid Doctor/Patient ID" });
+    }
+
+    // Fetch patient basic info
+    const patient = await User.findOne({ userId: patientId, isDeleted: false })
+      .select("userId firstname lastname email mobile DOB gender bloodgroup age")
+      .lean();
+
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    // Fetch prescriptions
+    const prescriptions = await ePrescriptionModel.find({
+      doctorId,
+      userId: patientId,
+    })
+      .select("prescriptionId appointmentId createdAt")
+      .lean();
+
+    const appointmentToPrescriptionCreatedAtMap = new Map();
+    prescriptions.forEach(p => {
+      const existing = appointmentToPrescriptionCreatedAtMap.get(p.appointmentId);
+      if (!existing || new Date(p.createdAt) > new Date(existing)) {
+        appointmentToPrescriptionCreatedAtMap.set(p.appointmentId, p.createdAt);
+      }
+    });
+
+    // Fetch appointments
+    const appointmentResponse = await axios
+      .get(
+        `${process.env.APPOINTMENTS_SERVICE_URL}/appointment/getAppointmentsByDoctor/${doctorId}?patientId=${patientId}`,
+        { headers: { Authorization: req.headers.authorization } }
+      )
+      .catch(() => ({ data: { data: [] } }));
+
+    const appointments = appointmentResponse.data.data;
+
+    // Fetch addressIds
+    const addressIds = [
+      ...new Set(appointments.map(a => a.addressId).filter(Boolean)),
+    ];
+
+    // Fetch addresses
+    let addresses = await UserAddress.find({
+      addressId: { $in: addressIds },
+    }).lean();
+
+    // Generate signed URLs for labHeader & pharmacyHeader
+    for (let addr of addresses) {
+      if (addr.labHeader) {
+        try {
+          addr.labHeaderUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: addr.labHeader,
+            }),
+            { expiresIn: 3600 }
+          );
+        } catch (err) {
+          console.error(
+            `Error generating signed URL for labHeader ${addr.labHeader}:`,
+            err.message
+          );
+        }
+      }
+
+      if (addr.pharmacyHeader) {
+        try {
+          addr.pharmacyHeaderUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: addr.pharmacyHeader,
+            }),
+            { expiresIn: 3600 }
+          );
+        } catch (err) {
+          console.error(
+            `Error generating signed URL for pharmacyHeader ${addr.pharmacyHeader}:`,
+            err.message
+          );
+        }
+      }
+    }
+
+    const addressMap = new Map(addresses.map(a => [a.addressId, a]));
+
+    // Fetch tests + medicines with updated $lookup
+    const [testsAgg, medicinesAgg] = await Promise.all([
+      PatientTest.aggregate([
+        { $match: { patientId, doctorId, prescriptionId, isDeleted: false } },
+        // Add projection to ensure testName is trimmed and lowercase for matching
+        {
+          $addFields: {
+            testNameLower: { $toLower: { $trim: { input: "$testName" } } },
+          },
+        },
+        {
+          $lookup: {
+            from: "testinventories",
+            let: { testNameLower: "$testNameLower" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $eq: [
+                      { $toLower: { $trim: { input: "$testName" } } },
+                      "$$testNameLower",
+                    ],
+                  },
+                },
+              },
+              // Ensure only the first matching inventory record is used
+              { $limit: 1 },
+            ],
+            as: "testInventory",
+          },
+        },
+        { $unwind: { path: "$testInventory", preserveNullAndEmptyArrays: true } },
+        // Remove temporary field
+        { $project: { testNameLower: 0 } },
+      ]),
+
+      Medicine.aggregate([
+        { $match: { patientId, doctorId, prescriptionId, isDeleted: false } },
+        // Add projection to ensure medName and dosage are trimmed and lowercase
+        {
+          $addFields: {
+            medNameLower: { $toLower: { $trim: { input: "$medName" } } },
+            dosageLower: { $toLower: { $trim: { input: "$dosage" } } },
+          },
+        },
+        {
+          $lookup: {
+            from: "medinventories",
+            let: { medNameLower: "$medNameLower", dosageLower: "$dosageLower" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      {
+                        $eq: [
+                          { $toLower: { $trim: { input: "$medName" } } },
+                          "$$medNameLower",
+                        ],
+                      },
+                      {
+                        $eq: [
+                          { $toLower: { $trim: { input: "$dosage" } } },
+                          "$$dosageLower",
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+              // Ensure only the first matching inventory record is used
+              { $limit: 1 },
+            ],
+            as: "medInventory",
+          },
+        },
+        { $unwind: { path: "$medInventory", preserveNullAndEmptyArrays: true } },
+        // Remove temporary fields
+        { $project: { medNameLower: 0, dosageLower: 0 } },
+      ]),
+    ]);
+
+    console.log("testsAgg", testsAgg);
+    console.log("medicinesAgg", medicinesAgg);
+
+    // Fetch payments
+    let payments = [];
+    try {
+      const paymentResponse = await axios.get(
+        `${process.env.FINANCE_SERVICE_URL}/finance/getPaymentsByDoctorAndUser/${doctorId}`,
+        { headers: { Authorization: req.headers.authorization } }
+      );
+      payments = paymentResponse.data.data.filter(p => p.userId === patientId);
+    } catch (error) {
+      console.error("Error fetching payments:", error.message);
+    }
+
+    // Build response
+    const patientDetails = appointments.map(appointment => {
+      const appointmentId = appointment.appointmentId;
+      const addressInfo = addressMap.get(appointment.addressId);
+
+      // Tests without repeating labDetails
+      const appointmentTests = testsAgg
+        .filter(t => t.prescriptionId === prescriptionId)
+        .map(t => ({
+          testId: t._id,
+          labTestID: t.labTestID,
+          testName: t.testName,
+          status: t.status,
+          price: t.testInventory?.testPrice ?? null,
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        }));
+      console.log("appointmentTests", appointmentTests);
+
+      // Medicines without repeating pharmacyDetails
+      const appointmentMedicines = medicinesAgg
+        .filter(m => m.prescriptionId === prescriptionId)
+        .map(m => ({
+          medicineId: m._id,
+          pharmacyMedID: m.pharmacyMedID,
+          medName: m.medName,
+          dosage: m.dosage,
+          quantity: m.quantity,
+          gst: m.medInventory?.gst ?? 6,
+          cgst: m.medInventory?.cgst ?? 6,
+          status: m.status,
+          price: m.medInventory?.price ?? null,
+          createdAt: m.createdAt,
+          updatedAt: m.updatedAt,
+        }));
+      console.log("appointmentMedicines", appointmentMedicines);
+
+      // Extract labDetails only once
+      let labDetails = null;
+      if (appointmentTests.length > 0 && addressInfo) {
+        labDetails = {
+          labName: addressInfo.labName,
+          labHeaderUrl: addressInfo.labHeaderUrl || null,
+          labAddress: addressInfo.labAddress,
+          labGst: addressInfo.labGst,
+          labPan: addressInfo.labPan,
+          labRegistrationNo: addressInfo.labRegistrationNo,
+        };
+      }
+
+      // Extract pharmacyDetails only once
+      let pharmacyDetails = null;
+      if (appointmentMedicines.length > 0 && addressInfo) {
+        pharmacyDetails = {
+          pharmacyName: addressInfo.pharmacyName,
+          pharmacyHeaderUrl: addressInfo.pharmacyHeaderUrl || null,
+          pharmacyAddress: addressInfo.pharmacyAddress,
+          pharmacyGst: addressInfo.pharmacyGst,
+          pharmacyPan: addressInfo.pharmacyPan,
+          pharmacyRegistrationNo: addressInfo.pharmacyRegistrationNo,
+        };
+      }
+
+      const payment = payments.find(p => p.appointmentId === appointmentId);
+      const prescriptionCreatedAt =
+        appointmentToPrescriptionCreatedAtMap.get(appointmentId) ||
+        appointment.createdAt;
+
+      return {
+        patientId: patient.userId,
+        firstname: patient.firstname,
+        lastname: patient.lastname,
+        mobile: patient.mobile,
+        email: patient.email,
+        DOB: patient.DOB,
+        age: patient.age,
+        gender: patient.gender,
+        bloodgroup: patient.bloodgroup,
+        prescriptionCreatedAt,
+        appointments: [
+          {
+            appointmentId: appointment._id,
+            appointmentRefId: appointment.appointmentId,
+            appointmentType: appointment.appointmentType,
+            appointmentDate: appointment.appointmentDate,
+            appointmentTime: appointment.appointmentTime,
+            appointmentStatus: appointment.appointmentStatus,
+            createdAt: appointment.createdAt,
+            addressId: appointment.addressId,
+            feeDetails: payment
+              ? {
+                  actualAmount: payment.actualAmount,
+                  discount: payment.discount,
+                  discountType: payment.discountType,
+                  finalAmount: payment.finalAmount,
+                  paymentStatus: payment.paymentStatus,
+                  paidAt: payment.paidAt,
+                }
+              : null,
+          },
+        ],
+        labDetails,
+        pharmacyDetails,
+        tests: appointmentTests,
+        medicines: appointmentMedicines,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: patientDetails,
+    });
+  } catch (error) {
+    console.error("Error fetching patient details:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Internal Server Error" });
+  }
+};
 
 
 
