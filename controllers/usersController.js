@@ -1257,4 +1257,69 @@ exports.generateReferralCode = async (req, res) => {
     });
   }
 }
+
+exports.updateAppLanguage = async (req, res) => {
+  try{
+    const userId = req.params.userId;
+    const { appLanguage } = req.body;
+
+  // Validate input
+    if (!userId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'userId is required'
+      });
+    }
+
+    if (!appLanguage) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'appLanguage is required'
+      });
+    }
+
+    // Validate appLanguage value
+    const validLanguages = ['en', 'hi', 'tel'];
+    if (!validLanguages.includes(appLanguage)) {
+      return res.status(400).json({
+        success: false,
+        message: `appLanguage must be one of: ${validLanguages.join(', ')}`
+      });
+    }
+
+    // Find and update the user
+    const updatedUser = await Users.findOneAndUpdate(
+      { userId, isDeleted: false },
+      { 
+        appLanguage,
+        updatedAt: Date.now()
+      },
+      { 
+        new: true, // Return the updated document
+        runValidators: true // Ensure schema validations are applied
+      }
+    );
+
+    // Check if user exists
+    if (!updatedUser) {
+      return res.status(404).json({
+         status: 'fail',
+        message: 'User not found or has been deleted'
+      });
+    }
+
+    // Return the full updated user document
+    return res.status(200).json({
+      status: 'success',
+      message: 'App language updated successfully',
+      data: updatedUser
+    });
+
+  }catch(error){
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+  }
+}
   
