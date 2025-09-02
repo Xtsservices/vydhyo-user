@@ -113,6 +113,6 @@ router.get('/getAllDoctorsBySpecializations/:specialization', getAllDoctorsBySpe
 router.get("/getUserIds", getUserIds);
 router.get("/getDoctorsListByFamily/:familyProvider", getDoctorsListByFamily);
 router.post("/generateReferralCode", generateReferralCode);
-router.patch("/:userId/language", updateAppLanguage);
+router.get("/:userId/:appLanguage/language", updateAppLanguage);
 
 module.exports = router;

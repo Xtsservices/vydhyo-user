@@ -1260,8 +1260,7 @@ exports.generateReferralCode = async (req, res) => {
 
 exports.updateAppLanguage = async (req, res) => {
   try{
-    const userId = req.params.userId;
-    const { appLanguage } = req.body;
+    const { appLanguage, userId } = req.params;
 
   // Validate input
     if (!userId) {
