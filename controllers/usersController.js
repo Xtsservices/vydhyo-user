@@ -1343,18 +1343,16 @@ async function updateDoctorOverallRating(doctorId) {
 
 exports.addFeedback = async (req, res) => {
    try {
-    const { doctorId, rating, comment } = req.body;
+    const { doctorId, rating, comment, appointmentId } = req.body;
     const patientId = req.headers.userid; // Assuming user ID from auth middleware
-
     // Validate input
-    if (!doctorId || !rating) {
-      return res.status(400).json({ error: 'Doctor ID and rating are required' });
+    if (!doctorId || !rating || !appointmentId) {
+      return res.status(400).json({ error: 'Doctor ID, rating, and appointment ID are required' });
     }
 
     if (rating < 1 || rating > 5) {
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
     }
-
     // Check if doctor exists
   const doctor = await Users.findOne({ userId: doctorId, role: 'doctor' });
     if (!doctor || doctor.role !== 'doctor') {
@@ -1367,13 +1365,19 @@ exports.addFeedback = async (req, res) => {
     }
     // Determine the ID to check for appointments (patientId or familyProvider)
     const appointmentCheckId = patient.familyProvider || patientId;
-
+     // Check if feedback already exists for this appointment
+    const existingFeedback = await Feedback.findOne({ appointmentId });
+    console.log("existingFeedback", existingFeedback)
+    if (existingFeedback) {
+      return res.status(400).json({ status: 'fail', message: 'Feedback already submitted for this appointment' });
+    }
     // Check if patient (or family provider) has consulted the doctor
     try {
       const response = await axios.get('http://localhost:4005/appointment/checkPatientConsultedDoctor', {
         params: {
           userId: appointmentCheckId,
-          doctorId
+          doctorId,
+          appointmentId
         }
       });
 console.log("response.data", response.data)
@@ -1392,6 +1396,7 @@ console.log("response.data", response.data)
     const feedback = new Feedback({
       patientId,
       doctorId,
+       appointmentId,
       rating,
       comment: comment || ''
     });
@@ -1422,7 +1427,7 @@ exports.getFeedbackByDoctorId = async (req, res) => {
     }
 
     const feedback = await Feedback.find({ doctorId })
-      .select('patientId rating comment createdAt');
+      .select('patientId appointmentId rating comment createdAt');
 
     // Fetch patient names for feedback
     const patientIds = [...new Set(feedback.map(f => f.patientId))];
@@ -1439,6 +1444,7 @@ exports.getFeedbackByDoctorId = async (req, res) => {
         overallRating: doctor.overallRating,
         feedback: feedback.map(f => ({
           patientName: patientMap[f.patientId] || 'Unknown',
+            appointmentId: f.appointmentId,
           rating: f.rating,
           comment: f.comment,
           createdAt: f.createdAt
@@ -1469,7 +1475,7 @@ exports.getAllFeedbacksGivenByPatient = async(req, res) => {
 
     // Get all feedback submitted by the patient
     const feedback = await Feedback.find({ patientId })
-      .select('doctorId rating comment createdAt')
+      .select('doctorId appointmentId rating comment createdAt')
       .sort({ createdAt: -1 });
 
     // Fetch doctor names and specialization for feedback
@@ -1489,6 +1495,7 @@ exports.getAllFeedbacksGivenByPatient = async(req, res) => {
       feedback: feedback.map(f => ({
         doctorName: doctorMap[f.doctorId] ? doctorMap[f.doctorId].name : 'Unknown',
         specialization: doctorMap[f.doctorId] ? doctorMap[f.doctorId].specialization : 'Unknown',
+         appointmentId: f.appointmentId,
         rating: f.rating,
         comment: f.comment,
         createdAt: f.createdAt
@@ -1502,4 +1509,116 @@ exports.getAllFeedbacksGivenByPatient = async(req, res) => {
     });
   }
 }
+
+// Submit Doctor Reply to Feedback
+exports.submitDoctorReply = async (req, res) => {
+  try {
+    const { feedbackId, message } = req.body;
+    const doctorId = req.headers.userid; 
+
+
+    if (!feedbackId || !message) {
+      return res.status(400).json({ status: 'fail', message: 'Feedback ID and message are required' });
+    }
+
+    const feedback = await Feedback.findById(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({ status: 'fail', message: 'Feedback not found' });
+    }
+
+    if (feedback.doctorId !== doctorId) {
+      return res.status(403).json({ status: 'fail', message: 'Unauthorized to reply to this feedback' });
+    }
+
+    // Check if it's the doctor's turn
+    if (feedback.conversation.length > 0 && feedback.conversation[feedback.conversation.length - 1].sender === 'doctor') {
+      return res.status(400).json({ status: 'fail', message: 'It is not your turn to respond' });
+    }
+
+    feedback.conversation.push({
+      sender: 'doctor',
+      message,
+      createdAt: new Date()
+    });
+
+    await feedback.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Reply submitted successfully',
+      feedback: {
+        _id: feedback._id,
+        patientId: feedback.patientId,
+        doctorId: feedback.doctorId,
+        appointmentId: feedback.appointmentId,
+        rating: feedback.rating,
+        comment: feedback.comment,
+        conversation: feedback.conversation,
+        createdAt: feedback.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error submitting doctor reply:', error.message);
+    return res.status(500).json({ status: 'fail', message: error.message.includes('Conversation limit') ? error.message : 'Internal server error' });
+  }
+};
+
+exports.submitPatientResponse = async (req, res) => { 
+try {
+    const { feedbackId, message } = req.body;
+    const patientId = req.user.userId;
+
+    console.log('Received patient response request:', { feedbackId, patientId, message });
+
+    if (!feedbackId || !message) {
+      return res.status(400).json({ status: 'fail', message: 'Feedback ID and message are required' });
+    }
+
+    const feedback = await Feedback.findById(feedbackId);
+    if (!feedback) {
+      return res.status(404).json({ status: 'fail', message: 'Feedback not found' });
+    }
+
+    if (feedback.patientId !== patientId) {
+      return res.status(403).json({ status: 'fail', message: 'Unauthorized to respond to this feedback' });
+    }
+
+    // Check if it's the patient's turn
+    if (feedback.conversation.length > 0 && feedback.conversation[feedback.conversation.length - 1].sender === 'patient') {
+      return res.status(400).json({ status: 'fail', message: 'It is not your turn to respond' });
+    }
+
+    // Check if conversation is empty (patient can't respond first)
+    if (feedback.conversation.length === 0) {
+      return res.status(400).json({ status: 'fail', message: 'Doctor must reply first' });
+    }
+
+    feedback.conversation.push({
+      sender: 'patient',
+      message,
+      createdAt: new Date()
+    });
+
+    await feedback.save();
+    console.log('Patient response saved:', feedback._id);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Response submitted successfully',
+      feedback: {
+        _id: feedback._id,
+        patientId: feedback.patientId,
+        doctorId: feedback.doctorId,
+        appointmentId: feedback.appointmentId,
+        rating: feedback.rating,
+        comment: feedback.comment,
+        conversation: feedback.conversation,
+        createdAt: feedback.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Error submitting patient response:', error.message);
+    return res.status(500).json({ status: 'fail', message: error.message.includes('Conversation limit') ? error.message : 'Internal server error' });
+  }
+};
   
