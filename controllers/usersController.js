@@ -1453,4 +1453,53 @@ exports.getFeedbackByDoctorId = async (req, res) => {
     });
   }
 }
+
+exports.getAllFeedbacksGivenByPatient = async(req, res) => {
+   try {
+    const { patientId } = req.params;
+
+    // Verify patient access
+    const patient = await Users.findOne({ userId: patientId , role: 'patient' });
+    if (!patient) {
+     return res.status(400).json({
+        status: 'fail',
+        message: 'Patient not found'
+      });
+    }
+
+    // Get all feedback submitted by the patient
+    const feedback = await Feedback.find({ patientId })
+      .select('doctorId rating comment createdAt')
+      .sort({ createdAt: -1 });
+
+    // Fetch doctor names and specialization for feedback
+    const doctorIds = [...new Set(feedback.map(f => f.doctorId))];
+    const doctors = await Users.find({ userId: { $in: doctorIds }, role: 'doctor' })
+      .select('firstname lastname specialization userId');
+    const doctorMap = doctors.reduce((map, d) => {
+      map[d.userId] = {
+        name: `${d.firstname} ${d.lastname}`,
+        specialization: d.specialization ? d.specialization.name : 'Unknown'
+      };
+      return map;
+    }, {});
+
+    res.json({
+      feedbackCount: feedback.length,
+      feedback: feedback.map(f => ({
+        doctorName: doctorMap[f.doctorId] ? doctorMap[f.doctorId].name : 'Unknown',
+        specialization: doctorMap[f.doctorId] ? doctorMap[f.doctorId].specialization : 'Unknown',
+        rating: f.rating,
+        comment: f.comment,
+        createdAt: f.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching patient feedback:', error);
+     return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+  }
+}
   
