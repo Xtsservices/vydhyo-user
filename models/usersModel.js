@@ -149,6 +149,12 @@ const userSchema = new mongoose.Schema({
    userFrom: {
     type: String,
     default: null
+  },
+  overallRating: { //feedback rating
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
   }
 
 });

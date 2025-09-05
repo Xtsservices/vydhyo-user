@@ -1,5 +1,6 @@
 const fs = require('fs');
 const Users = require('../models/usersModel');
+const Feedback = require('../models/feedbackModel');
 const userSchema = require('../schemas/userSchema');
 const {receptionistSchema}=require('../schemas/doctor_receptionistSchema')
 const { convertImageToBase64 } = require('../utils/imageService');
@@ -1316,6 +1317,137 @@ exports.updateAppLanguage = async (req, res) => {
 
   }catch(error){
     return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+  }
+}
+
+// Function to update doctor's overall rating
+async function updateDoctorOverallRating(doctorId) {
+  try {
+    const feedback = await Feedback.find({ doctorId });
+    const avgRating = feedback.length > 0
+      ? feedback.reduce((sum, f) => sum + f.rating, 0) / feedback.length
+      : 0;
+    
+    await Users.findOneAndUpdate(
+      { userId: doctorId, role: 'doctor' }, 
+      {
+      overallRating: Number(avgRating.toFixed(1))
+    });
+  } catch (error) {
+    console.error('Error updating overall rating:', error);
+  }
+}
+
+exports.addFeedback = async (req, res) => {
+   try {
+    const { doctorId, rating, comment } = req.body;
+    const patientId = req.headers.userid; // Assuming user ID from auth middleware
+
+    // Validate input
+    if (!doctorId || !rating) {
+      return res.status(400).json({ error: 'Doctor ID and rating are required' });
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+
+    // Check if doctor exists
+  const doctor = await Users.findOne({ userId: doctorId, role: 'doctor' });
+    if (!doctor || doctor.role !== 'doctor') {
+      return res.status(404).json({ error: 'Doctor not found' });
+    }
+     // Check if patient exists and get familyProvider
+    const patient = await Users.findOne({userId: patientId, role: 'patient' });
+    if (!patient) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+    // Determine the ID to check for appointments (patientId or familyProvider)
+    const appointmentCheckId = patient.familyProvider || patientId;
+
+    // Check if patient (or family provider) has consulted the doctor
+    try {
+      const response = await axios.get('http://localhost:4005/appointment/checkPatientConsultedDoctor', {
+        params: {
+          userId: appointmentCheckId,
+          doctorId
+        }
+      });
+console.log("response.data", response.data)
+      if (!response.data.hasAppointment) {
+        return res.status(403).json({
+         status: 'fail',
+        message: 'You can only provide feedback for doctors you have consulted'
+      });
+      }
+    } catch (error) {
+      console.error('Error checking appointment:', error);
+      return res.status(500).json({ error: 'Error verifying appointment status' });
+    }
+
+    // Create feedback
+    const feedback = new Feedback({
+      patientId,
+      doctorId,
+      rating,
+      comment: comment || ''
+    });
+
+    await feedback.save();
+
+    // Update doctor's overall rating
+    await updateDoctorOverallRating(doctorId);
+
+    res.status(201).json({ message: 'Feedback submitted successfully', feedback });
+  } catch (error) {
+    console.error('Error submitting feedback:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+  }
+}
+
+exports.getFeedbackByDoctorId = async (req, res) => {
+   try {
+    const { doctorId } = req.params;
+
+    // Get doctor details and feedback
+    const doctor = await Users.findOne({ userId: doctorId, role: 'doctor' }).select('firstname lastname specialization overallRating');
+    if (!doctor) {
+      return res.status(404).json({ error: 'Doctor not found' });
+    }
+
+    const feedback = await Feedback.find({ doctorId })
+      .select('patientId rating comment createdAt');
+
+    // Fetch patient names for feedback
+    const patientIds = [...new Set(feedback.map(f => f.patientId))];
+    const patients = await Users.find({ userId: { $in: patientIds } }).select('firstname lastname userId');
+    const patientMap = patients.reduce((map, p) => {
+      map[p.userId] = `${p.firstname} ${p.lastname}`;
+      return map;
+    }, {});
+
+    res.json({
+      doctor: {
+        name: `${doctor.firstname} ${doctor.lastname}`,
+        specialization: doctor.specialization.name,
+        overallRating: doctor.overallRating,
+        feedback: feedback.map(f => ({
+          patientName: patientMap[f.patientId] || 'Unknown',
+          rating: f.rating,
+          comment: f.comment,
+          createdAt: f.createdAt
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching doctor feedback:', error);
+     return res.status(500).json({
       status: 'fail',
       message: error.message || 'Internal server error'
     });
