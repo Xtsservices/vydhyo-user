@@ -1566,9 +1566,8 @@ exports.submitDoctorReply = async (req, res) => {
 exports.submitPatientResponse = async (req, res) => { 
 try {
     const { feedbackId, message } = req.body;
-    const patientId = req.user.userId;
+    const patientId = req.headers.userid;
 
-    console.log('Received patient response request:', { feedbackId, patientId, message });
 
     if (!feedbackId || !message) {
       return res.status(400).json({ status: 'fail', message: 'Feedback ID and message are required' });
@@ -1600,7 +1599,6 @@ try {
     });
 
     await feedback.save();
-    console.log('Patient response saved:', feedback._id);
 
     res.status(200).json({
       status: 'success',
