@@ -1621,4 +1621,54 @@ try {
     return res.status(500).json({ status: 'fail', message: error.message.includes('Conversation limit') ? error.message : 'Internal server error' });
   }
 };
+
+exports.getFeedbackById = async (req, res) => {
+ try {
+    const { feedbackId } = req.params;
+    const userId = req.headers.userid;
+    const feedback = await Feedback.findById(feedbackId);
+
+    if (!feedback) {
+      return res.status(404).json({ status: 'fail', message: 'Feedback not found' });
+    }
+
+    // Authorization check: only patient or doctor associated with feedback can access
+    if (feedback.patientId !== userId && feedback.doctorId !== userId) {
+      return res.status(403).json({ status: 'fail', message: 'Unauthorized to access this feedback' });
+    }
+
+    // Fetch doctor and patient names
+    const [doctor, patient] = await Promise.all([
+      Users.findOne({ userId: feedback.doctorId, role: 'doctor' })
+        .select('firstname lastname specialization'),
+      Users.findOne({ userId: feedback.patientId, role: 'patient' })
+        .select('firstname lastname')
+    ]);
+
+    res.json({
+      status: 'success',
+      feedback: {
+        feedbackId: feedback._id,
+        patientId: feedback.patientId,
+        patientName: patient ? `${patient.firstname} ${patient.lastname}` : 'Unknown',
+        doctorId: feedback.doctorId,
+        doctorName: doctor ? `${doctor.firstname} ${doctor.lastname}` : 'Unknown',
+        doctorSpecialization: doctor && doctor.specialization ? doctor.specialization.name : 'Unknown',
+        appointmentId: feedback.appointmentId,
+        rating: feedback.rating,
+        comment: feedback.comment,
+        conversation: feedback.conversation,
+        createdAt: feedback.createdAt,
+        updatedAt: feedback.updatedAt
+      }
+    });
+  }  catch (error) {
+    console.error('Error getFeedbackById :', error.message);
+     return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+    
+  }
+}
   

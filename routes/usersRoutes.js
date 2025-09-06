@@ -28,6 +28,7 @@ const {
     getAllFeedbacksGivenByPatient,
     submitDoctorReply,
     submitPatientResponse,
+    getFeedbackById,
    
 } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic, addLabToClinic, getPharmacyByClinicId, getLabByClinicId, getClinicNameByID } = require('../controllers/addressController');
@@ -127,6 +128,7 @@ router.get("/getFeedbackByDoctorId/:doctorId", getFeedbackByDoctorId);
 router.get("/getAllFeedbacksGivenByPatient/:patientId", getAllFeedbacksGivenByPatient);
 router.post("/submitDoctorReply", submitDoctorReply);
 router.post("/submitPatientResponse", submitPatientResponse);
+router.get("/getFeedbackById/:feedbackId", getFeedbackById);
 
 
 module.exports = router;
