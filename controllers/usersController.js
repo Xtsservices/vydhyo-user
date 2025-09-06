@@ -1568,6 +1568,7 @@ exports.getFeedbackByDoctorId = async (req, res) => {
         feedback: feedback.map(f => ({
           patientName: patientMap[f.patientId] || 'Unknown',
             appointmentId: f.appointmentId,
+            feedbackId: f._id,
           rating: f.rating,
           comment: f.comment,
           createdAt: f.createdAt
@@ -1619,6 +1620,7 @@ exports.getAllFeedbacksGivenByPatient = async(req, res) => {
         doctorName: doctorMap[f.doctorId] ? doctorMap[f.doctorId].name : 'Unknown',
         specialization: doctorMap[f.doctorId] ? doctorMap[f.doctorId].specialization : 'Unknown',
          appointmentId: f.appointmentId,
+         feedbackId: f._id,
         rating: f.rating,
         comment: f.comment,
         createdAt: f.createdAt
