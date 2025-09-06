@@ -923,7 +923,7 @@ exports.getAddress = async (req, res) => {
   }
 }
 
-exports.getClinicAddress = async (req, res) => {
+exports.getClinicAddress2 = async (req, res) => {
   try { 
     const userId = req.query.doctorId || req.headers.userid;
     const userAddress = await UserAddress.find({userId});
@@ -993,6 +993,64 @@ exports.getClinicAddress = async (req, res) => {
     });
   }
 }
+
+exports.getClinicAddress = async (req, res) => {
+  try {
+    const userId = req.query.doctorId || req.headers.userid;
+    const userAddress = await UserAddress.find({ userId }).lean(); // lean() = faster plain objects
+
+    if (!userAddress || userAddress.length === 0) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No clinic or hospital address found for this user',
+      });
+    }
+
+    const addressesWithUrls = await Promise.all(
+      userAddress.map(async (address) => {
+        let [headerImageUrl, digitalSignatureUrl] = await Promise.all([
+          address.headerImage
+            ? getSignedUrl(
+                s3Client,
+                new GetObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: address.headerImage,
+                }),
+                { expiresIn: 300 }
+              ).catch(() => address.headerImage)
+            : null,
+          address.digitalSignature
+            ? getSignedUrl(
+                s3Client,
+                new GetObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: address.digitalSignature,
+                }),
+                { expiresIn: 300 }
+              ).catch(() => address.digitalSignature)
+            : null,
+        ]);
+
+        return {
+          ...address,
+          headerImage: headerImageUrl || address.headerImage,
+          digitalSignature: digitalSignatureUrl || address.digitalSignature,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      data: addressesWithUrls,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
 
 exports.updateAddress = async (req, res) => {
   try {
