@@ -200,7 +200,7 @@ exports.getDoctorsCount = async (req, res) => {
 };
 
 
-exports.getUserById = async (req, res) => {
+exports.getUserById2 = async (req, res) => {
   const userId = req.query.userId || req.headers.userid;
   if (!userId) {
     return res.status(400).json({
@@ -335,6 +335,129 @@ if (address.labHeader) {
     });
   }
 }
+
+exports.getUserById = async (req, res) => {
+  const userId = req.query.userId || req.headers.userid;
+  if (!userId) {
+    return res.status(400).json({
+      status: 'fail',
+      message: 'User ID is required in query or headers',
+    });
+  }
+
+  try {
+    const user = await Users.aggregate([
+      userAggregation(userId, req.query.userId),
+    ]);
+
+    if (!user || user.length === 0) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found',
+      });
+    }
+
+    const userData = user[0];
+
+    /** ------------------  Handle Bank Details ------------------ */
+    if (userData.bankDetails) {
+      try {
+        if (userData.bankDetails.accountHolderName) {
+          userData.bankDetails.accountHolderName = decrypt(
+            userData.bankDetails.accountHolderName
+          );
+        }
+
+        if (userData.bankDetails.accountNumber) {
+          const decryptedAccNo = decrypt(userData.bankDetails.accountNumber);
+          userData.bankDetails.accountNumber = decryptedAccNo.replace(
+            /^(\d{2})(\d+)(\d{3})$/,
+            (match, first, middle, last) =>
+              first + '*'.repeat(middle.length) + last
+          );
+        }
+      } catch (err) {
+        console.error('Bank details decryption failed:', err.message);
+      }
+    }
+
+    /** ------------------  Optimize Address Image Handling ------------------ */
+    const addressesWithUrls = await Promise.all(
+      userData.addresses.map(async (address) => {
+        const signedUrls = {};
+
+        try {
+          if (address.headerImage) {
+            signedUrls.headerImage = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: address.headerImage,
+              }),
+              { expiresIn: 3600 }
+            );
+          }
+
+          if (address.digitalSignature) {
+            signedUrls.digitalSignature = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: address.digitalSignature,
+              }),
+              { expiresIn: 3600 }
+            );
+          }
+
+          if (address.pharmacyHeader) {
+            signedUrls.pharmacyHeader = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: address.pharmacyHeader,
+              }),
+              { expiresIn: 3600 }
+            );
+          }
+
+          if (address.labHeader) {
+            signedUrls.labHeader = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: address.labHeader,
+              }),
+              { expiresIn: 3600 }
+            );
+          }
+        } catch (s3Error) {
+          console.error(
+            `Failed to generate pre-signed URL for address ${address._id}:`,
+            s3Error
+          );
+        }
+
+        return {
+          ...address,
+          ...signedUrls,
+        };
+      })
+    );
+
+    userData.addresses = addressesWithUrls;
+
+    return res.status(200).json({
+      status: 'success',
+      data: userData,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
 
 
 exports.getUserClinicsData = async (req, res) => {
