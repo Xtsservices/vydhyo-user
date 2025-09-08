@@ -147,7 +147,7 @@ exports.approveDoctorByAdmin = async (req, res) => {
     //   await sendOTPSMS(
     //     doctorApproval.mobile,
     //     smsMessage,
-    //     "YOUR_TEMPLATE_ID" // 🔹 replace with your approved DLT template ID
+    //     "1707175447755557722" 
     //   );
     // }
 
