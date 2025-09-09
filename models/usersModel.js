@@ -145,6 +145,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ["pending", "applied", "invalid", "expired", "alreadyUsed"],
     default: "pending"
+  },
+  isFirstLogin: {
+    type: Boolean,
+    default: true
   }
 
 });

@@ -22,6 +22,7 @@ const {
     getUserIds,
     getDoctorsListByFamily,
     generateReferralCode,
+    updateFirstLogin,
    
 } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic, addLabToClinic, getPharmacyByClinicId, getLabByClinicId, getClinicNameByID } = require('../controllers/addressController');
@@ -112,5 +113,6 @@ router.get('/getAllDoctorsBySpecializations/:specialization', getAllDoctorsBySpe
 router.get("/getUserIds", getUserIds);
 router.get("/getDoctorsListByFamily/:familyProvider", getDoctorsListByFamily);
 router.post("/generateReferralCode", generateReferralCode);
+router.post("/updateFirstLogin", updateFirstLogin);
 
 module.exports = router;

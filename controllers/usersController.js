@@ -1257,4 +1257,34 @@ exports.generateReferralCode = async (req, res) => {
     });
   }
 }
+
+exports.updateFirstLogin = async (req, res) => {
+  try {
+    const userId = req.headers.userid; // Assuming authMiddleware attaches userId to req.user
+    // Find the user and update isFirstLogin to false
+    const user = await Users.findOneAndUpdate(
+      { userId },
+      { isFirstLogin: false, updatedAt: Date.now() },
+      { new: true } // Return the updated document
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      message: 'Welcome screen completed, isFirstLogin set to false',
+      user: {
+        userId: user.userId,
+        isFirstLogin: user.isFirstLogin
+      }
+    });
+  } catch (error) {
+    console.error('Error in updateFirstLogin:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message || 'Internal server error'
+    });
+  }
+}
   
