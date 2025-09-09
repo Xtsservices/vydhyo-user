@@ -965,21 +965,25 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
         {
           $lookup: {
             from: "testinventories",
-            let: { testNameLower: "$testNameLower" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $eq: [
-                      { $toLower: { $trim: { input: "$testName" } } },
-                      "$$testNameLower",
-                    ],
-                  },
+            let: { testNameLower: "$testNameLower",  doctorId: "$doctorId" },
+          pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                {
+                  $eq: [
+                    { $toLower: { $trim: { input: "$testName" } } },
+                    "$$testNameLower",
+                  ],
                 },
-              },
-              // Ensure only the first matching inventory record is used
-              { $limit: 1 },
-            ],
+                { $eq: ["$doctorId", "$$doctorId"] } // ✅ doctor-specific test price
+              ],
+            },
+          },
+        },
+        { $limit: 1 },
+      ],
             as: "testInventory",
           },
         },
@@ -1000,7 +1004,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
         {
           $lookup: {
             from: "medinventories",
-            let: { medNameLower: "$medNameLower", dosageLower: "$dosageLower" },
+            let: { medNameLower: "$medNameLower", dosageLower: "$dosageLower", doctorId: "$doctorId" },
             pipeline: [
               {
                 $match: {
@@ -1018,6 +1022,7 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
                           "$$dosageLower",
                         ],
                       },
+                       { $eq: ["$doctorId", "$$doctorId"] }
                     ],
                   },
                 },

@@ -15,6 +15,7 @@ const ePrescriptionModel = require('../models/ePrescriptionModel');
 const axios = require("axios");
 
 
+
 const {
   S3Client,
   PutObjectCommand,
@@ -1233,6 +1234,78 @@ exports.getAllDoctorsBySpecializations = async (req, res) => {
     }
 };
 
+exports.getAllDoctorsBySpecializations3 = async (req, res) => {
+    try {
+        const specialization = req.params.specialization?.trim();
+        if (!specialization) {
+            return res.status(400).json({
+                success: false,
+                message: 'Specialization parameter is required'
+            });
+        }
+
+        const doctors = await Users.aggregate([
+            {
+                $match: {
+                    role: 'doctor',
+                    status: 'approved',
+                    'specialization.name': { $regex: `^${specialization}\\s*$`, $options: 'i' }
+                }
+            },
+            {
+                $project: {
+                    userId: 1,
+                    firstname: 1,
+                    lastname: 1,
+                    email: 1,
+                    mobile: 1,
+                    consultationModeFee: 1,
+                    specialization: {
+                        name: { $trim: { input: '$specialization.name' } },
+                        experience: '$specialization.experience',
+                        degree: '$specialization.degree'
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'addresses',
+                    localField: 'userId',
+                    foreignField: 'userId',
+                    as: 'addresses',
+                    pipeline: [
+                        { $project: { addressId: 1, type: 1, address: 1, city: 1, state: 1, country: 1, pincode: 1 } }
+                    ]
+                }
+            }
+        ]);
+
+        if (!doctors.length) {
+            return res.status(404).json({
+                success: false,
+                message: `No approved doctors found for specialization: ${specialization}`
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Doctors with specialization ${specialization} retrieved successfully`,
+            data: doctors
+        });
+
+    } catch (error) {
+        console.error('Error fetching doctors by specialization:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch doctors by specialization',
+            error: error.message
+        });
+    }
+};
+
+
+
+
 exports.getUserIds = async(req, res) => {
   try {
     console.log("am in users")
@@ -1539,7 +1612,7 @@ console.log("response.data", response.data)
   }
 }
 
-exports.getFeedbackByDoctorId = async (req, res) => {
+exports.getFeedbackByDoctorId2 = async (req, res) => {
    try {
     const { doctorId } = req.params;
 
@@ -1583,6 +1656,81 @@ exports.getFeedbackByDoctorId = async (req, res) => {
     });
   }
 }
+
+exports.getFeedbackByDoctorId = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+
+    const result = await Users.aggregate([
+      { $match: { userId: doctorId, role: "doctor" } },
+      {
+        $lookup: {
+          from: "feedbacks",
+          localField: "userId",
+          foreignField: "doctorId",
+          as: "feedback",
+          pipeline: [
+            {
+              $lookup: {
+                from: "users",
+                localField: "patientId",
+                foreignField: "userId",
+                as: "patient",
+                pipeline: [
+                  { $project: { firstname: 1, lastname: 1, userId: 1 } }
+                ]
+              }
+            },
+            {
+              $unwind: {
+                path: "$patient",
+                preserveNullAndEmptyArrays: true
+              }
+            },
+            {
+              $project: {
+                appointmentId: 1,
+                feedbackId: "$_id",
+                rating: 1,
+                comment: 1,
+                createdAt: 1,
+                patientName: {
+                  $cond: [
+                    { $ifNull: ["$patient.userId", false] },
+                    { $concat: ["$patient.firstname", " ", "$patient.lastname"] },
+                    "Unknown"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        $project: {
+          name: { $concat: ["$firstname", " ", "$lastname"] },
+          specialization: "$specialization.name",
+          overallRating: 1,
+          feedback: 1
+        }
+      }
+    ]);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "Doctor not found" });
+    }
+
+    res.json({ doctor: result[0] });
+  } catch (error) {
+    console.error("Error fetching doctor feedback:", error);
+    return res.status(500).json({
+      status: "fail",
+      message: error.message || "Internal server error"
+    });
+  }
+};
+
+
 
 exports.getAllFeedbacksGivenByPatient = async(req, res) => {
    try {
