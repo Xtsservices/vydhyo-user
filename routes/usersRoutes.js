@@ -22,6 +22,13 @@ const {
     getUserIds,
     getDoctorsListByFamily,
     generateReferralCode,
+    updateAppLanguage,
+    addFeedback,
+    getFeedbackByDoctorId,
+    getAllFeedbacksGivenByPatient,
+    submitDoctorReply,
+    submitPatientResponse,
+    getFeedbackById,
     updateFirstLogin,
    
 } = require('../controllers/usersController');
@@ -113,6 +120,17 @@ router.get('/getAllDoctorsBySpecializations/:specialization', getAllDoctorsBySpe
 router.get("/getUserIds", getUserIds);
 router.get("/getDoctorsListByFamily/:familyProvider", getDoctorsListByFamily);
 router.post("/generateReferralCode", generateReferralCode);
+router.get("/:userId/:appLanguage/language", updateAppLanguage);
+
+
+//feedback and rating 
+router.post("/addFeedBack", addFeedback);
+router.get("/getFeedbackByDoctorId/:doctorId", getFeedbackByDoctorId);
+router.get("/getAllFeedbacksGivenByPatient/:patientId", getAllFeedbacksGivenByPatient);
+router.post("/submitDoctorReply", submitDoctorReply);
+router.post("/submitPatientResponse", submitPatientResponse);
+router.get("/getFeedbackById/:feedbackId", getFeedbackById);
+
 router.post("/updateFirstLogin", updateFirstLogin);
 
 module.exports = router;

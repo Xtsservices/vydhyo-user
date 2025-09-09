@@ -146,6 +146,16 @@ const userSchema = new mongoose.Schema({
     enum: ["pending", "applied", "invalid", "expired", "alreadyUsed"],
     default: "pending"
   },
+   userFrom: {
+    type: String,
+    default: null
+  },
+  overallRating: { //feedback rating
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
+  },
   isFirstLogin: {
     type: Boolean,
     default: true

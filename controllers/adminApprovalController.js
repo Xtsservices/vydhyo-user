@@ -138,6 +138,19 @@ exports.approveDoctorByAdmin = async (req, res) => {
          // Send email notification
         await sendStatusEmail(doctorApproval, req.body.status, req.body.rejectionReason);
 
+        //sms notification can be added here
+    //     if (req.body.status === "approved" && doctorApproval.mobile) {
+    //   const doctorName = `${doctorApproval.firstname || ""} ${doctorApproval.lastname || ""}`.trim();
+
+    //   const smsMessage = `Welcome Dr. ${doctorName} to VYDHYO! Your profile is live and ready to receive appointments. Let's transform healthcare together.`;
+
+    //   await sendOTPSMS(
+    //     doctorApproval.mobile,
+    //     smsMessage,
+    //     "1707175447755557722" 
+    //   );
+    // }
+
         return res.status(200).json({
           status: 'success',
           data: doctorApproval

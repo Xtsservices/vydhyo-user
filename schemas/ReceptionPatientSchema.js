@@ -13,6 +13,7 @@ const patientSchema = Joi.object({
     .pattern(/^[0-9]{10,15}$/)
     .message('Phone number must be between 10 to 15 digits')
     .required(),
+     userFrom: Joi.string().optional()
 });
 
 
@@ -35,6 +36,7 @@ const patientSchemaFromPatientApp = Joi.object({
     .valid('parent', 'child', 'self', 'other')
     .default('self')
     .optional(),
+      userFrom: Joi.string().optional()
 });
 // Joi schema for patient update (all fields optional)
 const patientUpdateSchema = Joi.object({
