@@ -858,7 +858,7 @@ console.log("appointmentMedicines",appointmentMedicines)
 };
 
 
-exports.fetchDoctorPatientDetails = async (req, res) => {
+exports.fetchDoctorPatientDetails3 = async (req, res) => {
   try {
     const { doctorId, patientId, prescriptionId } = req.params;
 
@@ -1174,6 +1174,273 @@ exports.fetchDoctorPatientDetails = async (req, res) => {
   }
 };
 
+exports.fetchDoctorPatientDetails = async (req, res) => {
+  try {
+    const { doctorId, patientId, prescriptionId } = req.params;
+
+    if (!doctorId || !patientId) {
+      return res.status(400).json({ error: "Invalid Doctor/Patient ID" });
+    }
+
+    // Run patient, prescriptions, and appointments in parallel
+    const [patient, prescriptions, appointmentResponse] = await Promise.all([
+      User.findOne({ userId: patientId, isDeleted: false })
+        .select("userId firstname lastname email mobile DOB gender bloodgroup age")
+        .lean(),
+
+      ePrescriptionModel.find({ doctorId, userId: patientId })
+        .select("prescriptionId appointmentId createdAt")
+        .lean(),
+
+      axios
+        .get(
+          `${process.env.APPOINTMENTS_SERVICE_URL}/appointment/getAppointmentsByDoctor/${doctorId}?patientId=${patientId}`,
+          { headers: { Authorization: req.headers.authorization } }
+        )
+        .catch(() => ({ data: { data: [] } })),
+    ]);
+
+    if (!patient) {
+      return res.status(404).json({ error: "Patient not found" });
+    }
+
+    // Build prescription createdAt map
+    const appointmentToPrescriptionCreatedAtMap = new Map();
+    prescriptions.forEach(p => {
+      const existing = appointmentToPrescriptionCreatedAtMap.get(p.appointmentId);
+      if (!existing || new Date(p.createdAt) > new Date(existing)) {
+        appointmentToPrescriptionCreatedAtMap.set(p.appointmentId, p.createdAt);
+      }
+    });
+
+    const appointments = appointmentResponse.data.data;
+
+    // Get unique addressIds
+    const addressIds = [...new Set(appointments.map(a => a.addressId).filter(Boolean))];
+
+    // Fetch addresses + tests + medicines in parallel
+    const [addresses, [testsAgg, medicinesAgg], paymentResponse] = await Promise.all([
+      UserAddress.find({ addressId: { $in: addressIds } }).lean(),
+
+      Promise.all([
+        PatientTest.aggregate([
+          { $match: { patientId, doctorId, prescriptionId, isDeleted: false } },
+          {
+            $addFields: {
+              testNameLower: { $toLower: { $trim: { input: "$testName" } } },
+            },
+          },
+          {
+            $lookup: {
+              from: "testinventories",
+              let: { testNameLower: "$testNameLower", doctorId: "$doctorId" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        {
+                          $eq: [
+                            { $toLower: { $trim: { input: "$testName" } } },
+                            "$$testNameLower",
+                          ],
+                        },
+                        { $eq: ["$doctorId", "$$doctorId"] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: "testInventory",
+            },
+          },
+          { $unwind: { path: "$testInventory", preserveNullAndEmptyArrays: true } },
+          { $project: { testNameLower: 0 } },
+        ]),
+
+        Medicine.aggregate([
+          { $match: { patientId, doctorId, prescriptionId, isDeleted: false } },
+          {
+            $addFields: {
+              medNameLower: { $toLower: { $trim: { input: "$medName" } } },
+              dosageLower: { $toLower: { $trim: { input: "$dosage" } } },
+            },
+          },
+          {
+            $lookup: {
+              from: "medinventories",
+              let: { medNameLower: "$medNameLower", dosageLower: "$dosageLower", doctorId: "$doctorId" },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        {
+                          $eq: [
+                            { $toLower: { $trim: { input: "$medName" } } },
+                            "$$medNameLower",
+                          ],
+                        },
+                        {
+                          $eq: [
+                            { $toLower: { $trim: { input: "$dosage" } } },
+                            "$$dosageLower",
+                          ],
+                        },
+                        { $eq: ["$doctorId", "$$doctorId"] },
+                      ],
+                    },
+                  },
+                },
+                { $limit: 1 },
+              ],
+              as: "medInventory",
+            },
+          },
+          { $unwind: { path: "$medInventory", preserveNullAndEmptyArrays: true } },
+          { $project: { medNameLower: 0, dosageLower: 0 } },
+        ]),
+      ]),
+
+      axios
+        .get(`${process.env.FINANCE_SERVICE_URL}/finance/getPaymentsByDoctorAndUser/${doctorId}`, {
+          headers: { Authorization: req.headers.authorization },
+        })
+        .catch(() => ({ data: { data: [] } })),
+    ]);
+
+    const payments = paymentResponse.data.data.filter(p => p.userId === patientId);
+
+    // Generate signed URLs in parallel
+    await Promise.all(
+      addresses.map(async addr => {
+        if (addr.labHeader) {
+          try {
+            addr.labHeaderUrl = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: addr.labHeader }),
+              { expiresIn: 3600 }
+            );
+          } catch {}
+        }
+        if (addr.pharmacyHeader) {
+          try {
+            addr.pharmacyHeaderUrl = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: addr.pharmacyHeader }),
+              { expiresIn: 3600 }
+            );
+          } catch {}
+        }
+      })
+    );
+
+    const addressMap = new Map(addresses.map(a => [a.addressId, a]));
+
+    // Build response
+    const patientDetails = appointments.map(appointment => {
+      const appointmentId = appointment.appointmentId;
+      const addressInfo = addressMap.get(appointment.addressId);
+
+      const appointmentTests = testsAgg.map(t => ({
+        testId: t._id,
+        labTestID: t.labTestID,
+        testName: t.testName,
+        status: t.status,
+        price: t.testInventory?.testPrice ?? null,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt,
+      }));
+
+      const appointmentMedicines = medicinesAgg.map(m => ({
+        medicineId: m._id,
+        pharmacyMedID: m.pharmacyMedID,
+        medName: m.medName,
+        dosage: m.dosage,
+        quantity: m.quantity,
+        gst: m.medInventory?.gst ?? 6,
+        cgst: m.medInventory?.cgst ?? 6,
+        status: m.status,
+        price: m.medInventory?.price ?? null,
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt,
+      }));
+
+      let labDetails = null;
+      if (appointmentTests.length > 0 && addressInfo) {
+        labDetails = {
+          labName: addressInfo.labName,
+          labHeaderUrl: addressInfo.labHeaderUrl || null,
+          labAddress: addressInfo.labAddress,
+          labGst: addressInfo.labGst,
+          labPan: addressInfo.labPan,
+          labRegistrationNo: addressInfo.labRegistrationNo,
+        };
+      }
+
+      let pharmacyDetails = null;
+      if (appointmentMedicines.length > 0 && addressInfo) {
+        pharmacyDetails = {
+          pharmacyName: addressInfo.pharmacyName,
+          pharmacyHeaderUrl: addressInfo.pharmacyHeaderUrl || null,
+          pharmacyAddress: addressInfo.pharmacyAddress,
+          pharmacyGst: addressInfo.pharmacyGst,
+          pharmacyPan: addressInfo.pharmacyPan,
+          pharmacyRegistrationNo: addressInfo.pharmacyRegistrationNo,
+        };
+      }
+
+      const payment = payments.find(p => p.appointmentId === appointmentId);
+      const prescriptionCreatedAt =
+        appointmentToPrescriptionCreatedAtMap.get(appointmentId) || appointment.createdAt;
+
+      return {
+        patientId: patient.userId,
+        firstname: patient.firstname,
+        lastname: patient.lastname,
+        mobile: patient.mobile,
+        email: patient.email,
+        DOB: patient.DOB,
+        age: patient.age,
+        gender: patient.gender,
+        bloodgroup: patient.bloodgroup,
+        prescriptionCreatedAt,
+        appointments: [
+          {
+            appointmentId: appointment._id,
+            appointmentRefId: appointment.appointmentId,
+            appointmentType: appointment.appointmentType,
+            appointmentDate: appointment.appointmentDate,
+            appointmentTime: appointment.appointmentTime,
+            appointmentStatus: appointment.appointmentStatus,
+            createdAt: appointment.createdAt,
+            addressId: appointment.addressId,
+            feeDetails: payment
+              ? {
+                  actualAmount: payment.actualAmount,
+                  discount: payment.discount,
+                  discountType: payment.discountType,
+                  finalAmount: payment.finalAmount,
+                  paymentStatus: payment.paymentStatus,
+                  paidAt: payment.paidAt,
+                }
+              : null,
+          },
+        ],
+        labDetails,
+        pharmacyDetails,
+        tests: appointmentTests,
+        medicines: appointmentMedicines,
+      };
+    });
+
+    return res.status(200).json({ success: true, data: patientDetails });
+  } catch (error) {
+    console.error("Error fetching patient details:", error);
+    return res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+};
 
 
 
