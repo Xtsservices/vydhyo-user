@@ -383,6 +383,36 @@ exports.getUserById = async (req, res) => {
       }
     }
 
+     /** ------------------  Handle Certificates ------------------ */
+    try {
+      if (userData.specialization) {
+        if (userData.specialization.degreeCertificate) {
+          userData.specialization.degreeCertificateUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: userData.specialization.degreeCertificate,
+            }),
+            { expiresIn: 3600 }
+          );
+        }
+
+        if (userData.specialization.specializationCertificate) {
+          userData.specialization.specializationCertificateUrl = await getSignedUrl(
+            s3Client,
+            new GetObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: userData.specialization.specializationCertificate,
+            }),
+            { expiresIn: 3600 }
+          );
+        }
+      }
+    } catch (certError) {
+      console.error("Failed to generate certificate URLs:", certError);
+    }
+
+
     /** ------------------  Optimize Address Image Handling ------------------ */
     const addressesWithUrls = await Promise.all(
       userData.addresses.map(async (address) => {
