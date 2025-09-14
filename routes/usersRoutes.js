@@ -48,7 +48,7 @@ router.get('/getUser', getUserById);
 router.get('/getKycByUserId', getKycByUserId);
 router.put('/updateUser', upload.single('profilePic'), updateUser);
 router.get('/deleteMyAccount', deleteMyAccount);
-router.post('/updateSpecialization', upload.fields([
+router.post('/updateSpecialization', upload2.fields([
     { name: 'drgreeCertificate', maxCount: 1 },
     { name: 'specializationCertificate', maxCount: 1 }
 ]), updateSpecialization);

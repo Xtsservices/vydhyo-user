@@ -23,6 +23,7 @@ const {
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { generateReferralCode } = require('../utils/referralCode');
+const crypto = require("crypto");
 
 const AWS_BUCKET_NAME = process.env.AWS_BUCKET_NAME;
 const AWS_BUCKET_REGION = process.env.AWS_BUCKET_REGION;
@@ -784,24 +785,38 @@ exports.updateSpecialization = async (req, res) => {
 
     // Optional: Handle file uploads if you're sending certificates as files instead of base64
     if (req?.files?.drgreeCertificate && req?.files?.drgreeCertificate.length > 0) {
-      const filePath = req.files.drgreeCertificate[0].path;
-      const { mimeType, base64 } = convertImageToBase64(filePath);
-      if (!req.body.drgreeCertificate) {
-        req.body.drgreeCertificate = {};
-      }
-      
-      
-     updateFields.specialization.degreeCertificate = { data: base64, mimeType };
-           fs.unlinkSync(filePath);
+     const file = req.files.drgreeCertificate[0];
+      const fileName = generateFileName();
+
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: fileName,
+          Body: file.buffer, // ✅ using buffer here
+          ContentType: file.mimetype,
+        })
+      );
+
+      updateFields.specialization.degreeCertificate = fileName;
+    }
  // Clean up temporary file
      
-    }
+    
     if (req?.files?.specializationCertificate && req?.files?.specializationCertificate.length > 0) {
-      const filePath = req.files.specializationCertificate[0].path;
-      const { mimeType, base64 } = convertImageToBase64(filePath);
-      updateFields.specialization.specializationCertificate = { data: base64, mimeType };
-       // Clean up the temporary file
-      fs.unlinkSync(filePath);
+
+       const file = req.files.specializationCertificate[0];
+      const fileName = generateFileName();
+
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: fileName,
+          Body: file.buffer, // ✅ using buffer here
+          ContentType: file.mimetype,
+        })
+      );
+ updateFields.specialization.specializationCertificate = fileName;
+     
     }
 
     // const updateFields = {
