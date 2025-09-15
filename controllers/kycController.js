@@ -241,25 +241,17 @@ exports.addKYCDetails = async (req, res) => {
     const file = req.files.panFile[0];
     const fileName = generateFileName();
 
-    // Run upload + PAN validation in parallel
-    const [_, panValidationResponse] = await Promise.all([
-      s3Client.send(new PutObjectCommand({
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Key: fileName,
-        Body: file.buffer,
-        ContentType: file.mimetype
-      })),
-      validatePan(req.body.panNumber, userId)
-    ]);
-
-    if (!panValidationResponse.success) {
-      return res.status(400).json({
-        status: 'fail',
-        message: 'PAN validation failed: ' + panValidationResponse.message,
-      });
-    }
+    // Upload PAN file to S3
+    await s3Client.send(new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: fileName,
+      Body: file.buffer,
+      ContentType: file.mimetype
+    }));
 
     const encryptedPanNumber = encrypt(req.body.panNumber);
+
+    // Save KYC with "pending" status
     const kycDetails = {
       userId,
       pan: {
@@ -278,6 +270,30 @@ exports.addKYCDetails = async (req, res) => {
       { new: true, upsert: true }
     );
 
+    // 🔹 Run PAN validation in background (non-blocking)
+    validatePan(req.body.panNumber, userId)
+      .then(async (panValidationResponse) => {
+        if (panValidationResponse.success) {
+          await KycDetailsModel.updateOne(
+            { userId },
+            { $set: { "pan.status": "verified", kycVerified: true, updatedAt: new Date() } }
+          );
+        } else {
+          await KycDetailsModel.updateOne(
+            { userId },
+            { $set: { "pan.status": "rejected", updatedAt: new Date() } }
+          );
+        }
+      })
+      .catch(async (err) => {
+        console.error("PAN validation error:", err);
+        await KycDetailsModel.updateOne(
+          { userId },
+          { $set: { "pan.status": "rejected", updatedAt: new Date() } }
+        );
+      });
+
+    // ✅ Respond immediately (no 20s wait)
     return res.status(201).json({ status: 'success', data: savedDetails });
 
   } catch (error) {
