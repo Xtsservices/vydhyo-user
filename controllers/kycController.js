@@ -115,7 +115,7 @@ const generateFileName = (bytes = 16) =>
 // };
 
 // Create KYC Details
-exports.addKYCDetails = async (req, res) => {
+exports.addKYCDetails2 = async (req, res) => {
   try {
     console.log('Request step0:', req.body);
     console.log('Request step0:', req.files)
@@ -218,6 +218,68 @@ console.log('PAN Validation Response:', 1900);
       status: 'success',
       data: savedDetails
     });
+  } catch (error) {
+    console.error('Error in addKYCDetails:', error);
+    res.status(500).json({ status: 'fail', error: 'Failed to create KYC details' });
+  }
+};
+
+exports.addKYCDetails = async (req, res) => {
+  try {
+    const userId = req.body.userId || req.headers.userid;
+    req.body.userId = userId;
+
+    const { error } = kycDetailsSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ status: 'fail', message: error.details[0].message });
+    }
+
+    if (!req.files?.panFile?.length) {
+      return res.status(400).json({ status: 'fail', message: 'PAN file is required' });
+    }
+
+    const file = req.files.panFile[0];
+    const fileName = generateFileName();
+
+    // Run upload + PAN validation in parallel
+    const [_, panValidationResponse] = await Promise.all([
+      s3Client.send(new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: fileName,
+        Body: file.buffer,
+        ContentType: file.mimetype
+      })),
+      validatePan(req.body.panNumber, userId)
+    ]);
+
+    if (!panValidationResponse.success) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'PAN validation failed: ' + panValidationResponse.message,
+      });
+    }
+
+    const encryptedPanNumber = encrypt(req.body.panNumber);
+    const kycDetails = {
+      userId,
+      pan: {
+        number: encryptedPanNumber,
+        attachmentUrl: fileName,
+        status: 'pending',
+      },
+      kycVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const savedDetails = await KycDetailsModel.findOneAndUpdate(
+      { userId },
+      { $set: kycDetails },
+      { new: true, upsert: true }
+    );
+
+    return res.status(201).json({ status: 'success', data: savedDetails });
+
   } catch (error) {
     console.error('Error in addKYCDetails:', error);
     res.status(500).json({ status: 'fail', error: 'Failed to create KYC details' });
