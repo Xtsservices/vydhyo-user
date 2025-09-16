@@ -321,74 +321,55 @@ exports.addKYCDetails = async (req, res) => {
     const fileName = generateFileName();
 
     // Upload PAN file to S3
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Key: fileName,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      })
-    );
+    await s3Client.send(new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: fileName,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    }));
 
     const encryptedPanNumber = encrypt(req.body.panNumber);
 
-    // Save KYC with "pending" status
-    const kycDetails = {
-      userId,
-      pan: {
-        number: encryptedPanNumber,
-        attachmentUrl: fileName,
-        status: 'pending',
-      },
-      kycVerified: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
+    // Save with pending status
     await KycDetailsModel.findOneAndUpdate(
       { userId },
-      { $set: kycDetails },
+      {
+        $set: {
+          userId,
+          pan: { number: encryptedPanNumber, attachmentUrl: fileName, status: 'pending' },
+          kycVerified: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      },
       { new: true, upsert: true }
     );
 
-    // 🔹 Run PAN validation in background
-    validatePan(req.body.panNumber, userId)
-      .then(async (panValidationResponse) => {
-        if (panValidationResponse.success) {
-          await KycDetailsModel.updateOne(
-            { userId },
-            {
-              $set: {
-                "pan.status": "verified",
-                kycVerified: true,
-                updatedAt: new Date(),
-              },
-            }
-          );
-        } else {
-          await KycDetailsModel.updateOne(
-            { userId },
-            { $set: { "pan.status": "rejected", updatedAt: new Date() } }
-          );
-        }
-      })
-      .catch(async (err) => {
-        console.error("PAN validation error:", err);
-        await KycDetailsModel.updateOne(
-          { userId },
-          { $set: { "pan.status": "rejected", updatedAt: new Date() } }
-        );
-      });
+    // 🔹 Wait for PAN validation (blocking)
+    const panValidationResponse = await validatePan(req.body.panNumber, userId);
 
-    // ✅ Fetch the latest DB record to include in response
+    if (panValidationResponse.success) {
+      await KycDetailsModel.updateOne(
+        { userId },
+        { $set: { "pan.status": "verified", kycVerified: true, updatedAt: new Date() } }
+      );
+    } else {
+      await KycDetailsModel.updateOne(
+        { userId },
+        { $set: { "pan.status": "rejected", updatedAt: new Date() } }
+      );
+    }
+
+    // ✅ Fetch latest after validation
     const latestDetails = await KycDetailsModel.findOne({ userId });
-
     return res.status(201).json({ status: "success", data: latestDetails });
+
   } catch (error) {
     console.error("Error in addKYCDetails:", error);
     res.status(500).json({ status: "fail", error: "Failed to create KYC details" });
   }
 };
+
 
 
 // Read KYC Details by ID
