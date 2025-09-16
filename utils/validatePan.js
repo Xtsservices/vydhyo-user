@@ -28,6 +28,7 @@ const validatePan = async (pan) => {
     // Make API call
     const response = await axios(config);
 console.log("response===", response)
+ console.log("PAN validation response:", response.data);
     // Return success response
     return {
       success: true,

@@ -273,6 +273,7 @@ exports.addKYCDetails = async (req, res) => {
     // 🔹 Run PAN validation in background (non-blocking)
     validatePan(req.body.panNumber, userId)
       .then(async (panValidationResponse) => {
+        console.log("panValidationResponse==",panValidationResponse)
         if (panValidationResponse.success) {
           await KycDetailsModel.updateOne(
             { userId },
