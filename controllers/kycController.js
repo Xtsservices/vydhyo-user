@@ -333,10 +333,18 @@ exports.addKYCDetails = async (req, res) => {
     const encryptedPanNumber = encrypt(req.body.panNumber);
 
     // 🔹 Validate PAN (blocking before saving final status)
-    const panValidationResponse = await validatePan(req.body.panNumber, userId);
+    let panValidationResponse;
+    try {
+      panValidationResponse = await validatePan(req.body.panNumber, userId);
+    } catch (err) {
+      console.error("PAN validation error:", err?.message || err);
+      return res.status(400).json({
+        status: "fail",
+        message: "Invalid PAN number",
+      });
+    }
 
     if (!panValidationResponse.success) {
-      // ❌ PAN invalid → don't set verified, return error
       return res.status(400).json({
         status: "fail",
         message: "Invalid PAN number",
@@ -363,11 +371,13 @@ exports.addKYCDetails = async (req, res) => {
     );
 
     return res.status(201).json({ status: "success", data: latestDetails });
+
   } catch (error) {
     console.error("Error in addKYCDetails:", error);
-    res
-      .status(500)
-      .json({ status: "fail", error: "Failed to create KYC details" });
+    return res.status(500).json({
+      status: "fail",
+      error: "Something went wrong while processing KYC details",
+    });
   }
 };
 
