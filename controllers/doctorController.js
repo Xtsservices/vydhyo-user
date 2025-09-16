@@ -124,6 +124,21 @@ exports.createPatient = async (req, res) => {
       });
     }
 
+    // check if patient already exists (using mobile & DOB for uniqueness)
+    const existingPatient = await Users.findOne({
+      mobile: req.body.mobile,
+      firstname: req.body.firstname,
+      // DOB: req.body.DOB
+    });
+
+    if (existingPatient) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Patient already exists with same details",
+        data: existingPatient
+      });
+    }
+
     req.body.status = "active";
     req.body.role = "patient";
     req.body.doctorId = req.headers?.userid;
