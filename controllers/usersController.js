@@ -601,7 +601,6 @@ exports.getKycByUserId = async (req, res) => {
     // }
 
      let kycDetails = kycData[0].kycDetails || null;
-
     // 🔑 Decrypt PAN before sending response
 
      if (kycDetails) {
@@ -615,13 +614,14 @@ exports.getKycByUserId = async (req, res) => {
       }
 
       // Generate signed URL for panImage
-      if (kycDetails.panImage) {
+  if (kycDetails.pan && kycDetails.pan.attachmentUrl) {
+  
         try {
-          kycDetails.panImageUrl = await getSignedUrl(
+          kycDetails.pan.attachmentUrl = await getSignedUrl(
             s3Client,
             new GetObjectCommand({
               Bucket: process.env.AWS_BUCKET_NAME,
-              Key: kycDetails.panImage,
+              Key:  kycDetails.pan.attachmentUrl,
             }),
             { expiresIn: 3600 } // 1 hour, matching headerImageUrl
           );
