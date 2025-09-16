@@ -372,11 +372,17 @@ exports.getUserById = async (req, res) => {
 
         if (userData.bankDetails.accountNumber) {
           const decryptedAccNo = decrypt(userData.bankDetails.accountNumber);
-          userData.bankDetails.accountNumber = decryptedAccNo.replace(
-            /^(\d{2})(\d+)(\d{3})$/,
-            (match, first, middle, last) =>
-              first + '*'.repeat(middle.length) + last
-          );
+          // If no query.userId (self lookup) OR query.userId === headers.userid → show plain
+      if (!req.query.userId || req.query.userId === req.headers.userid) {
+        userData.bankDetails.accountNumber = decryptedAccNo;
+      } else {
+        // If querying another user → mask account number
+        userData.bankDetails.accountNumber = decryptedAccNo.replace(
+          /^(\d{2})(\d+)(\d{3})$/,
+          (match, first, middle, last) =>
+            first + '*'.repeat(middle.length) + last
+        );
+      }
         }
       } catch (err) {
         console.error('Bank details decryption failed:', err.message);
