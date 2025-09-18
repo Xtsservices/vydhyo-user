@@ -1115,7 +1115,11 @@ exports.getClinicAddress = async (req, res) => {
 
     const addressesWithUrls = await Promise.all(
       userAddress.map(async (address) => {
-        let [headerImageUrl, digitalSignatureUrl] = await Promise.all([
+        let [headerImageUrl, digitalSignatureUrl,
+            clinicQrCodeUrl,
+          pharmacyQrCodeUrl,
+          labQrCodeUrl,
+        ] = await Promise.all([
           address.headerImage
             ? getSignedUrl(
                 s3Client,
@@ -1136,12 +1140,45 @@ exports.getClinicAddress = async (req, res) => {
                 { expiresIn: 300 }
               ).catch(() => address.digitalSignature)
             : null,
+             address.clinicQrCode
+            ? getSignedUrl(
+                s3Client,
+                new GetObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: address.clinicQrCode,
+                }),
+                { expiresIn: 300 }
+              ).catch(() => address.clinicQrCode)
+            : null,
+          address.pharmacyQrCode
+            ? getSignedUrl(
+                s3Client,
+                new GetObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: address.pharmacyQrCode,
+                }),
+                { expiresIn: 300 }
+              ).catch(() => address.pharmacyQrCode)
+            : null,
+          address.labQrCode
+            ? getSignedUrl(
+                s3Client,
+                new GetObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: address.labQrCode,
+                }),
+                { expiresIn: 300 }
+              ).catch(() => address.labQrCode)
+            : null,
         ]);
 
         return {
           ...address,
           headerImage: headerImageUrl || address.headerImage,
           digitalSignature: digitalSignatureUrl || address.digitalSignature,
+           clinicQrCode: clinicQrCodeUrl || address.clinicQrCode,
+          pharmacyQrCode: pharmacyQrCodeUrl || address.pharmacyQrCode,
+          labQrCode: labQrCodeUrl || address.labQrCode,
         };
       })
     );
