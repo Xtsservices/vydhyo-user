@@ -1001,6 +1001,7 @@ const processPayment = async (req, res) => {
         )
         .required()
         .min(1),
+        paymentMethod: Joi.string().valid("cash", "upi", "card").optional().default("cash"),
     }).validate(req.body);
 
     if (error) {
@@ -1018,7 +1019,9 @@ const processPayment = async (req, res) => {
       paymentStatus = "paid",
       discount,
       discountType,
+      paymentMethod 
     } = req.body;
+   
 
     // Step 2: Optional - Verify patient exists
     const patientExists = await Users.findOne({ userId: patientId });
@@ -1065,6 +1068,7 @@ const processPayment = async (req, res) => {
           discountType: discountType || "percentage",
           paymentStatus: "paid",
           paymentFrom: "lab",
+          paymentMethod : paymentMethod || 'cash',
         });
 
         if (!paymentResponse || paymentResponse.status !== "success") {

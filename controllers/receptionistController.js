@@ -1472,6 +1472,8 @@ exports.totalBillPayFromReception = async (req, res) => {
           status:Joi.string().allow(null),
         })
       ).optional(),
+      paymentMethod: Joi.string().valid("cash", "upi", "card").optional().default("cash"),
+      
     }).validate(req.body, { presence: 'optional' });
 
     if (error) {
@@ -1481,7 +1483,7 @@ exports.totalBillPayFromReception = async (req, res) => {
       });
     }
 
-    const { patientId, doctorId, tests = [], medicines = [], paymentStatus = 'paid', discount, discountType } = req.body;
+    const { patientId, doctorId, tests = [], medicines = [], paymentStatus = 'paid', discount, discountType, paymentMethod } = req.body;
 
     // Validate that at least one of tests or medicines is provided
     if (tests.length === 0 && medicines.length === 0) {
@@ -1533,6 +1535,7 @@ exports.totalBillPayFromReception = async (req, res) => {
             discountType: discountType || 'percentage',
             paymentStatus: 'paid',
             paymentFrom: 'lab',
+            paymentMethod :paymentMethod || 'cash'
           });
 
           if (!paymentResponse || paymentResponse.status !== 'success') {
@@ -1578,6 +1581,7 @@ exports.totalBillPayFromReception = async (req, res) => {
             discountType: discountType || 'percentage',
             paymentStatus: 'paid',
             paymentFrom: 'pharmacy',
+             paymentMethod :paymentMethod || 'cash'
           });
 
           if (!paymentResponse || paymentResponse.status !== 'success') {
