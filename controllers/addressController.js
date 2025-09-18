@@ -464,7 +464,7 @@ if (req.files) {
       
       // Pharmacy QR Code
       if (req.files['pharmacyQR'] && req.files['pharmacyQR'][0] && req.body.pharmacyName && req.body.pharmacyRegistrationNo) {
-        let existingQR = await QRCode.findOne({ pharmacyRegistrationNo: req.body.pharmacyRegistrationNo, type: 'Pharmacy' });
+        let existingQR = await QRCode.findOne({ pharmacyRegistrationNo: req.body.pharmacyRegistrationNo });
         let pharmacyQRPhoto;
         if (!existingQR) {
           pharmacyQRPhoto = generateFileName();
