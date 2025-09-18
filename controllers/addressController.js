@@ -729,6 +729,7 @@ exports.addPharmacyToClinic = async (req, res) => {
     clinic.pharmacyPan = pharmacyPan;
     clinic.pharmacyAddress = pharmacyAddress;
     clinic.pharmacyHeader = pharmacyHeader || clinic.pharmacyHeader;
+    clinic.pharmacyQrCode = pharmacyQrCode;
     clinic.pharmacyId = pharmacyId;
     clinic.updatedBy = userId;
     clinic.updatedAt = new Date();
@@ -877,18 +878,70 @@ console.log("clinic=====", clinic)
 console.log("req.file====",req.file)
 
     // 2. Optional lab header image upload
-    let labHeader = null;
-    if (req.file) {
-      const fileName = generateFileName();
-      await s3Client.send(new PutObjectCommand({
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Body: req.file.buffer,
-        Key: fileName,
-        ContentType: req.file.mimetype
-      }));
-      labHeader = fileName;
+   let labHeader = clinic.labHeader;
+    let labQrCode = clinic.labQrCode;
+    const qrCodeEntries = [];
+    if (req.files) {
+      // Lab Header
+      if (req.files['labHeader'] && req.files['labHeader'][0]) {
+        const fileName = generateFileName();
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Body: req.files['labHeader'][0].buffer,
+            Key: fileName,
+            ContentType: req.files['labHeader'][0].mimetype,
+          })
+        );
+        labHeader = fileName;
+      }
+
+      // Lab QR Code
+      if (req.files['labQR'] && req.files['labQR'][0] && labName && labRegistrationNo) {
+        let existingQR = await qrCodeModel.findOne({ labRegistrationNo, type: 'Lab' });
+        let labQRPhoto;
+        if (!existingQR) {
+          labQRPhoto = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: req.files['labQR'][0].buffer,
+              Key: labQRPhoto,
+              ContentType: req.files['labQR'][0].mimetype,
+            })
+          );
+          qrCodeEntries.push({
+            addressId,
+            userId,
+            type: 'Lab',
+            qrCode: labQRPhoto,
+            labRegistrationNo,
+            labId: clinic.labId || null, // Will be set below if not already set
+            createdBy: userId,
+            updatedBy: userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } else {
+          labQRPhoto = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: req.files['labQR'][0].buffer,
+              Key: labQRPhoto,
+              ContentType: req.files['labQR'][0].mimetype,
+            })
+          );
+          await qrCodeModel.updateOne(
+            { labRegistrationNo, type: 'Lab' },
+            { qrCode: labQRPhoto, updatedBy: userId, updatedAt: new Date() }
+          );
+          qrCodeEntries.push({ ...existingQR.toObject(), qrCode: labQRPhoto, updatedBy: userId, updatedAt: new Date() });
+        }
+        labQrCode = labQRPhoto;
+      }
     }
-console.log("labHeader=====", labHeader)
+
 
     // 3. Generate labId if not already present
     let labId = clinic.labId;
@@ -901,13 +954,24 @@ console.log("labHeader=====", labHeader)
       labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE + counter.seq;
     }
 
-    // 4. Update clinic record with lab details
+    // Step 4: Save new QR codes to the QRCode collection
+    if (qrCodeEntries.length > 0) {
+      for (const qrCode of qrCodeEntries) {
+        if (!qrCode._id) {
+          qrCode.labId = labId; // Ensure labId is set
+          await qrCodeModel.create(qrCode);
+        }
+      }
+    }
+
+    // 5. Update clinic record with lab details
     clinic.labName = labName;
     clinic.labRegistrationNo = labRegistrationNo;
     clinic.labGst = labGst;
     clinic.labPan = labPan;
     clinic.labAddress = labAddress;
     clinic.labHeader = labHeader || clinic.labHeader;
+     clinic.labQrCode = labQrCode;
     clinic.labId = labId;
     clinic.updatedBy = userId;
     clinic.updatedAt = new Date();

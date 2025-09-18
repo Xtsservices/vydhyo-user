@@ -83,7 +83,10 @@ router.get('/getPharmacyByClinicId/:addressId', getPharmacyByClinicId);
 
 
 
-router.post('/addLabToClinic', upload2.single('labHeader'), addLabToClinic);
+router.post('/addLabToClinic', upload2.fields([
+    { name: 'labHeader', maxCount: 1 },
+    { name: 'labQR', maxCount: 1 },
+  ]), addLabToClinic);
 router.get('/getLabByClinicId/:addressId', getLabByClinicId);
 
 
