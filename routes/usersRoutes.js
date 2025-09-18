@@ -75,7 +75,10 @@ router.post(
   addAddressFromWeb
 );
 
-router.post('/addPharmacyToClinic', upload2.single('pharmacyHeader'), addPharmacyToClinic);
+router.post('/addPharmacyToClinic',  upload2.fields([
+    { name: 'pharmacyHeader', maxCount: 1 },
+    { name: 'pharmacyQR', maxCount: 1 },
+  ]), addPharmacyToClinic);
 router.get('/getPharmacyByClinicId/:addressId', getPharmacyByClinicId);
 
 

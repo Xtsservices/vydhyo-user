@@ -464,7 +464,7 @@ if (req.files) {
       
       // Pharmacy QR Code
       if (req.files['pharmacyQR'] && req.files['pharmacyQR'][0] && req.body.pharmacyName && req.body.pharmacyRegistrationNo) {
-        let existingQR = await QRCode.findOne({ pharmacyRegistrationNo: req.body.pharmacyRegistrationNo });
+        let existingQR = await qrCodeModel.findOne({ pharmacyRegistrationNo: req.body.pharmacyRegistrationNo, type: 'Pharmacy' });
         let pharmacyQRPhoto;
         if (!existingQR) {
           pharmacyQRPhoto = generateFileName();
@@ -495,7 +495,7 @@ if (req.files) {
 
       // Lab QR Code
       if (req.files['labQR'] && req.files['labQR'][0] && req.body.labName && req.body.labRegistrationNo) {
-        let existingQR = await qrCodeModel.findOne({ labRegistrationNo: req.body.labRegistrationNo });
+        let existingQR = await qrCodeModel.findOne({ labRegistrationNo: req.body.labRegistrationNo ,  type: 'Lab'});
         let labQRPhoto;
         if (!existingQR) {
           labQRPhoto = generateFileName();
@@ -608,7 +608,7 @@ exports.addPharmacyToClinic = async (req, res) => {
       });
     }
 
-
+ // Step 2: Pharmacy duplication check
      /** ─────────────── Pharmacy duplication check ─────────────── **/
     if (pharmacyRegistrationNo && !bypassCheck) {
       const existingPharmacy = await UserAddress.findOne({
@@ -635,22 +635,75 @@ exports.addPharmacyToClinic = async (req, res) => {
         }
       }
     }
-    // Step 2: Optional pharmacy header upload
-    let pharmacyHeader = null;
-    if (req.file) {
-          const fileName = generateFileName();
-      await s3Client.send(new PutObjectCommand({
-        Bucket: process.env.AWS_BUCKET_NAME,
-        Body: req.file.buffer,
-        Key: fileName,
-        ContentType: req.file.mimetype
-      }));
-      pharmacyHeader = fileName;
+    // Step 3: Handle file uploads
+  let pharmacyHeader = clinic.pharmacyHeader;
+    let pharmacyQrCode = clinic.pharmacyQrCode;
+    const qrCodeEntries = [];
+
+    if (req.files) {
+      // Pharmacy Header
+      if (req.files['pharmacyHeader'] && req.files['pharmacyHeader'][0]) {
+        const fileName = generateFileName();
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Body: req.files['pharmacyHeader'][0].buffer,
+            Key: fileName,
+            ContentType: req.files['pharmacyHeader'][0].mimetype,
+          })
+        );
+        pharmacyHeader = fileName;
+      }
+
+      // Pharmacy QR Code
+      if (req.files['pharmacyQR'] && req.files['pharmacyQR'][0] && pharmacyName && pharmacyRegistrationNo) {
+        let existingQR = await qrCodeModel.findOne({ pharmacyRegistrationNo, type: 'Pharmacy' });
+        let pharmacyQRPhoto;
+        if (!existingQR) {
+          pharmacyQRPhoto = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: req.files['pharmacyQR'][0].buffer,
+              Key: pharmacyQRPhoto,
+              ContentType: req.files['pharmacyQR'][0].mimetype,
+            })
+          );
+          qrCodeEntries.push({
+            addressId,
+            userId,
+            type: 'Pharmacy',
+            qrCode: pharmacyQRPhoto,
+            pharmacyRegistrationNo,
+            pharmacyId: clinic.pharmacyId || null, // Will be set below if not already set
+            createdBy: userId,
+            updatedBy: userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } else {
+          pharmacyQRPhoto = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: req.files['pharmacyQR'][0].buffer,
+              Key: pharmacyQRPhoto,
+              ContentType: req.files['pharmacyQR'][0].mimetype,
+            })
+          );
+          await qrCodeModel.updateOne(
+            { pharmacyRegistrationNo, type: 'Pharmacy' },
+            { qrCode: pharmacyQRPhoto, updatedBy: userId, updatedAt: new Date() }
+          );
+          qrCodeEntries.push({ ...existingQR.toObject(), qrCode: pharmacyQRPhoto, updatedBy: userId, updatedAt: new Date() });
+        }
+        pharmacyQrCode = pharmacyQRPhoto;
+      }
     }
 
   
 
-    // Step 3: Generate pharmacyId if missing
+    // Step 4: Generate pharmacyId if missing
     let pharmacyId = clinic.pharmacyId;
     if (!pharmacyId) {
       const counter = await Sequence.findByIdAndUpdate(
@@ -660,8 +713,16 @@ exports.addPharmacyToClinic = async (req, res) => {
       );
       pharmacyId = sequenceConstant.PHARMACY_SEQUENCE.SEQUENCE + counter.seq;
     }
-
-    // Step 4: Update clinic record with pharmacy details
+// Step 5: Save new QR codes to the QRCode collection
+    if (qrCodeEntries.length > 0) {
+      for (const qrCode of qrCodeEntries) {
+        if (!qrCode._id) {
+          qrCode.pharmacyId = pharmacyId; // Ensure pharmacyId is set
+          await qrCodeModel.create(qrCode);
+        }
+      }
+    }
+    // Step 6: Update clinic record with pharmacy details
     clinic.pharmacyName = pharmacyName;
     clinic.pharmacyRegistrationNo = pharmacyRegistrationNo;
     clinic.pharmacyGst = pharmacyGst;
