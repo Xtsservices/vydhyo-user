@@ -22,6 +22,7 @@ const multer = require('multer');
 const pharmacyMapping = require('../models/pharmacyMapping');
 const labMapping = require('../models/labMapping');
 const crypto = require("crypto");
+const qrCodeModel = require('../models/qrCodeModel');
 
 // Multer configuration for memory storage
 const storage = multer.memoryStorage();
@@ -351,9 +352,37 @@ exports.addAddressFromWeb = async (req, res) => {
       }
     }
 
+      /** ─────────────── ID generation ─────────────── **/
+    if (req.body.pharmacyName && !req.body.pharmacyId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.PHARMACY_SEQUENCE.PHARMACY_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.pharmacyId = sequenceConstant.PHARMACY_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    if (req.body.labName && !req.body.labId) {
+      const counter = await Sequence.findByIdAndUpdate(
+        { _id: sequenceConstant.LAB_SEQUENCE.LAB_MODEL },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
+      req.body.labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE + counter.seq;
+    }
+
+    /** ─────────────── Generate addressId ─────────────── **/
+     req.body.createdBy = userId;
+    req.body.updatedBy = userId;
+    req.body.addressId = uuidv4().replace(/-/g, '');
+    req.body.status = 'Active';
+    req.body.createdAt = new Date();
+    req.body.updatedAt = new Date();
+
     /** ─────────────── File Upload (optional) ─────────────── **/
    /** ─────────────── File Upload (optional) ─────────────── **/
 if (req.files) {
+  const qrCodeEntries = [];
 
   // Clinic Header (file)
       if (req.files['file'] && req.files['file'][0]) {
@@ -402,35 +431,113 @@ if (req.files) {
     }));
     req.body.labHeader = labPhoto;
   }
+
+   // Clinic QR Code
+      if (req.files['clinicQR'] && req.files['clinicQR'][0] && ['Clinic', 'Hospital'].includes(req.body.type)) {
+        let existingQR = await qrCodeModel.findOne({ addressId: req.body.addressId, type: 'Clinic' });
+        let clinicQRPhoto;
+        if (!existingQR) {
+          clinicQRPhoto = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: req.files['clinicQR'][0].buffer,
+              Key: clinicQRPhoto,
+              ContentType: req.files['clinicQR'][0].mimetype,
+            })
+          );
+          qrCodeEntries.push({
+            addressId: req.body.addressId,
+            userId,
+            type: 'Clinic',
+            qrCode: clinicQRPhoto,
+            createdBy: userId,
+            updatedBy: userId,
+          });
+        } else {
+          clinicQRPhoto = existingQR.qrCode; // Reuse existing QR code
+          qrCodeEntries.push(existingQR);
+        }
+        req.body.clinicQrCode = clinicQRPhoto; // Store in Address model
+      }
+
+      
+      // Pharmacy QR Code
+      if (req.files['pharmacyQR'] && req.files['pharmacyQR'][0] && req.body.pharmacyName && req.body.pharmacyRegistrationNo) {
+        let existingQR = await QRCode.findOne({ pharmacyRegistrationNo: req.body.pharmacyRegistrationNo, type: 'Pharmacy' });
+        let pharmacyQRPhoto;
+        if (!existingQR) {
+          pharmacyQRPhoto = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: req.files['pharmacyQR'][0].buffer,
+              Key: pharmacyQRPhoto,
+              ContentType: req.files['pharmacyQR'][0].mimetype,
+            })
+          );
+          qrCodeEntries.push({
+            addressId: req.body.addressId,
+            userId,
+            type: 'Pharmacy',
+            qrCode: pharmacyQRPhoto,
+            pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+            pharmacyId: req.body.pharmacyId,
+            createdBy: userId,
+            updatedBy: userId,
+          });
+        } else {
+          pharmacyQRPhoto = existingQR.qrCode; // Reuse existing QR code
+          qrCodeEntries.push(existingQR);
+        }
+        req.body.pharmacyQrCode = pharmacyQRPhoto; // Store in Address model
+      }
+
+      // Lab QR Code
+      if (req.files['labQR'] && req.files['labQR'][0] && req.body.labName && req.body.labRegistrationNo) {
+        let existingQR = await qrCodeModel.findOne({ labRegistrationNo: req.body.labRegistrationNo });
+        let labQRPhoto;
+        if (!existingQR) {
+          labQRPhoto = generateFileName();
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Body: req.files['labQR'][0].buffer,
+              Key: labQRPhoto,
+              ContentType: req.files['labQR'][0].mimetype,
+            })
+          );
+          qrCodeEntries.push({
+            addressId: req.body.addressId,
+            userId,
+            type: 'Lab',
+            qrCode: labQRPhoto,
+            labRegistrationNo: req.body.labRegistrationNo,
+            labId: req.body.labId,
+            createdBy: userId,
+            updatedBy: userId,
+          });
+        } else {
+          labQRPhoto = existingQR.qrCode; // Reuse existing QR code
+          qrCodeEntries.push(existingQR);
+        }
+        req.body.labQrCode = labQRPhoto; // Store in Address model
+      }
+
+      // Save new QR codes to the QRCode collection
+if (qrCodeEntries.length > 0) {
+  for (const qrCode of qrCodeEntries) {
+    if (!qrCode._id) { // Only save new QR codes
+      await qrCodeModel.create(qrCode);
+    }
+  }
+}
 }
 
 
-    /** ─────────────── ID generation ─────────────── **/
-    if (req.body.pharmacyName && !req.body.pharmacyId) {
-      const counter = await Sequence.findByIdAndUpdate(
-        { _id: sequenceConstant.PHARMACY_SEQUENCE.PHARMACY_MODEL },
-        { $inc: { seq: 1 } },
-        { new: true, upsert: true }
-      );
-      req.body.pharmacyId = sequenceConstant.PHARMACY_SEQUENCE.SEQUENCE + counter.seq;
-    }
-
-    if (req.body.labName && !req.body.labId) {
-      const counter = await Sequence.findByIdAndUpdate(
-        { _id: sequenceConstant.LAB_SEQUENCE.LAB_MODEL },
-        { $inc: { seq: 1 } },
-        { new: true, upsert: true }
-      );
-      req.body.labId = sequenceConstant.LAB_SEQUENCE.SEQUENCE + counter.seq;
-    }
+  
 
     /** ─────────────── Create Address ─────────────── **/
-    req.body.createdBy = userId;
-    req.body.updatedBy = userId;
-    req.body.addressId = uuidv4().replace(/-/g, '');
-    req.body.status = 'Active';
-    req.body.createdAt = new Date();
-    req.body.updatedAt = new Date();
 
     const userAddress = await UserAddress.create(req.body);
 

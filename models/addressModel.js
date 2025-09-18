@@ -165,7 +165,19 @@ const addressSchema = new mongoose.Schema({
 labId: {
   type: String,
   default: null
-}
+},
+clinicQrCode: {
+    type: String,
+    default: null,
+  },
+  pharmacyQrCode: {
+    type: String,
+    default: null,
+  },
+  labQrCode: {
+    type: String,
+    default: null,
+  }
 });
 
 

@@ -67,7 +67,10 @@ router.post(
     { name: 'file', maxCount: 1 }, // Clinic header
     { name: 'signature', maxCount: 1 }, // Digital signature
     { name: 'pharmacyHeader', maxCount: 1 },
-    { name: 'labHeader', maxCount: 1 }
+    { name: 'labHeader', maxCount: 1 },
+    { name: 'clinicQR', maxCount: 1 }, // Clinic QR code
+    { name: 'pharmacyQR', maxCount: 1 }, // Pharmacy QR code
+    { name: 'labQR', maxCount: 1 }, // Lab QR code
   ]),
   addAddressFromWeb
 );

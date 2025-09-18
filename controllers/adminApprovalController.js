@@ -2,6 +2,7 @@
 const nodemailer = require('nodemailer');
 const approvalSchema=require('../schemas/adminApprovalSchema')
 const Users = require('../models/usersModel');
+const addressModel = require('../models/addressModel');
 
 
 // Configure Nodemailer transporter
@@ -119,7 +120,37 @@ exports.approveDoctorByAdmin = async (req, res) => {
             message: error.details[0].message,
           });
         }
+
+         // 🔹 Find doctor first
+    const user = await Users.findOne({ userId: req.body.userId });
+    if (!user) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Doctor not found",
+      });
+    }
         if(req.body.status=='approved'){
+            const clinic = await addressModel.findOne({
+        userId: req.body.userId,
+        type: "Clinic",
+        status: "Active",
+      });
+
+      if (!clinic) {
+        return res.status(400).json({
+          status: "fail",
+          message: "Doctor must have at least one Clinic address before approval",
+        });
+      }
+console.log(clinic, "clinic==")
+      // 2️ Check consultation fees
+      if (!user.consultationModeFee || user.consultationModeFee.length === 0) {
+        return res.status(400).json({
+          status: "fail",
+          message: "Doctor must have at least one consultation mode & fee before approval",
+        });
+      }
+      console.log("aaaa")
             req.body.isVerified =true;
         }
         req.body.updatedBy = req.headers.userid;
