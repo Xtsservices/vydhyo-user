@@ -128,6 +128,7 @@ exports.createPatient = async (req, res) => {
     const existingPatient = await Users.findOne({
       mobile: req.body.mobile,
       firstname: req.body.firstname,
+      role: "patient"
       // DOB: req.body.DOB
     });
 
