@@ -594,6 +594,359 @@ if (qrCodeEntries.length > 0) {
 };
 
 
+
+
+
+exports.updateImagesAddress = async (req, res) => {
+  console.log("Incoming Body:", req.body);
+  console.log("Incoming Files:", req.files);
+
+  try {
+    const userId = req.body.userId || req.headers.userid;
+    const addressId = req.body.addressId;
+
+    if (!addressId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Address ID is required',
+      });
+    }
+
+    // Find existing address
+    const existingAddress = await UserAddress.findOne({ addressId, userId });
+    if (!existingAddress) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Address not found or you do not have permission to update it',
+      });
+    }
+
+    const bypassCheck = req.query.bypassCheck;
+
+    /** ─────────────── Pharmacy check ─────────────── **/
+    if (req.body.pharmacyRegistrationNo && !bypassCheck) {
+      const existingPharmacy = await UserAddress.findOne({
+        pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+        pharmacyId: { $ne: null },
+        userId: { $ne: userId },
+      });
+
+      if (existingPharmacy && existingPharmacy.addressId !== addressId) {
+        const existingMapping = await pharmacyMapping.findOne({
+          pharmacyId: existingPharmacy.pharmacyId,
+          doctorId: userId,
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This pharmacy is already registered with another doctor. Do you want to link it?',
+            data: {
+              pharmacyId: existingPharmacy.pharmacyId,
+              existingDoctorId: existingPharmacy.userId,
+            },
+          });
+        }
+      }
+    }
+
+    /** ─────────────── Lab check ─────────────── **/
+    if (req.body.labRegistrationNo && !bypassCheck) {
+      const existingLab = await UserAddress.findOne({
+        labRegistrationNo: req.body.labRegistrationNo,
+        labId: { $ne: null },
+      });
+
+      if (existingLab && existingLab.addressId !== addressId) {
+        const existingMapping = await labMapping.findOne({
+          labId: existingLab.labId,
+          doctorId: userId,
+        });
+
+        if (!existingMapping) {
+          return res.status(200).json({
+            status: 'warning',
+            message: 'This lab is already registered with another doctor. Do you want to link it?',
+            data: {
+              labId: existingLab.labId,
+              existingDoctorId: existingLab.userId,
+            },
+          });
+        }
+      }
+    }
+
+    /** ─────────────── File Upload (optional) ─────────────── **/
+    const qrCodeEntries = [];
+    const updateFields = {}; // Define updateFields here
+
+    // Clinic Header (file)
+    if (req.files['file'] && req.files['file'][0]) {
+      console.log("Processing Clinic Header Upload");
+      const headerPhoto = generateFileName();
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['file'][0].buffer,
+          Key: headerPhoto,
+          ContentType: req.files['file'][0].mimetype,
+        })
+      );
+      updateFields.headerImage = headerPhoto;
+    }
+
+    // Digital Signature (signature)
+    if (req.files['signature'] && req.files['signature'][0]) {
+      console.log("Processing Digital Signature Upload");
+      const signaturePhoto = generateFileName();
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['signature'][0].buffer,
+          Key: signaturePhoto,
+          ContentType: req.files['signature'][0].mimetype,
+        })
+      );
+      updateFields.digitalSignature = signaturePhoto;
+    }
+
+    // Pharmacy Header
+    if (req.files['pharmacyHeader'] && req.files['pharmacyHeader'][0]) {
+      console.log("Processing Pharmacy Header Upload");
+      const pharmacyPhoto = generateFileName();
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['pharmacyHeader'][0].buffer,
+          Key: pharmacyPhoto,
+          ContentType: req.files['pharmacyHeader'][0].mimetype,
+        })
+      );
+      updateFields.pharmacyHeader = pharmacyPhoto;
+    }
+
+    // Lab Header
+    if (req.files['labHeader'] && req.files['labHeader'][0]) {
+      console.log("Processing Lab Header Upload");
+      const labPhoto = generateFileName();
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Body: req.files['labHeader'][0].buffer,
+          Key: labPhoto,
+          ContentType: req.files['labHeader'][0].mimetype,
+        })
+      );
+      updateFields.labHeader = labPhoto;
+    }
+
+    // Clinic QR Code
+    if (req.files['clinicQR'] && req.files['clinicQR'][0]) {
+      console.log("Processing Clinic QR Code Upload, Type:", req.body.type);
+      if (['Clinic', 'Hospital'].includes(req.body.type)) {
+        let existingQR = await qrCodeModel.findOne({ addressId, type: 'Clinic' });
+        const clinicQRPhoto = generateFileName();
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Body: req.files['clinicQR'][0].buffer,
+            Key: clinicQRPhoto,
+            ContentType: req.files['clinicQR'][0].mimetype,
+          })
+        );
+        if (!existingQR) {
+          qrCodeEntries.push({
+            addressId,
+            userId,
+            type: 'Clinic',
+            qrCode: clinicQRPhoto,
+            createdBy: userId,
+            updatedBy: userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } else {
+          existingQR.qrCode = clinicQRPhoto;
+          existingQR.updatedBy = userId;
+          existingQR.updatedAt = new Date();
+          qrCodeEntries.push(existingQR);
+        }
+        updateFields.clinicQrCode = clinicQRPhoto;
+      } else {
+        console.log("Clinic QR Code skipped: Invalid type");
+      }
+    }
+
+    // Pharmacy QR Code
+    if (req.files['pharmacyQR'] && req.files['pharmacyQR'][0]) {
+      console.log("Processing Pharmacy QR Code Upload, Pharmacy Name:", req.body.pharmacyName, "Registration No:", req.body.pharmacyRegistrationNo);
+      // Relax condition to allow update if pharmacyId exists in existingAddress
+      if (req.body.pharmacyName && req.body.pharmacyRegistrationNo || existingAddress.pharmacyId) {
+        let existingQR = await qrCodeModel.findOne({ 
+          pharmacyRegistrationNo: req.body.pharmacyRegistrationNo || existingAddress.pharmacyRegistrationNo, 
+          type: 'Pharmacy' 
+        });
+        const pharmacyQRPhoto = generateFileName();
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Body: req.files['pharmacyQR'][0].buffer,
+            Key: pharmacyQRPhoto,
+            ContentType: req.files['pharmacyQR'][0].mimetype,
+          })
+        );
+        if (!existingQR) {
+          qrCodeEntries.push({
+            addressId,
+            userId,
+            type: 'Pharmacy',
+            qrCode: pharmacyQRPhoto,
+            pharmacyRegistrationNo: req.body.pharmacyRegistrationNo || existingAddress.pharmacyRegistrationNo,
+            pharmacyId: req.body.pharmacyId || existingAddress.pharmacyId,
+            createdBy: userId,
+            updatedBy: userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } else {
+          existingQR.qrCode = pharmacyQRPhoto;
+          existingQR.updatedBy = userId;
+          existingQR.updatedAt = new Date();
+          qrCodeEntries.push(existingQR);
+        }
+        updateFields.pharmacyQrCode = pharmacyQRPhoto;
+      } else {
+        console.log("Pharmacy QR Code skipped: Missing pharmacyName or pharmacyRegistrationNo and no existing pharmacyId");
+      }
+    }
+
+    // Lab QR Code
+    if (req.files['labQR'] && req.files['labQR'][0]) {
+      console.log("Processing Lab QR Code Upload, Lab Name:", req.body.labName, "Registration No:", req.body.labRegistrationNo);
+      // Relax condition to allow update if labId exists in existingAddress
+      if (req.body.labName && req.body.labRegistrationNo || existingAddress.labId) {
+        let existingQR = await qrCodeModel.findOne({ 
+          labRegistrationNo: req.body.labRegistrationNo || existingAddress.labRegistrationNo, 
+          type: 'Lab' 
+        });
+        const labQRPhoto = generateFileName();
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Body: req.files['labQR'][0].buffer,
+            Key: labQRPhoto,
+            ContentType: req.files['labQR'][0].mimetype,
+          })
+        );
+        if (!existingQR) {
+          qrCodeEntries.push({
+            addressId,
+            userId,
+            type: 'Lab',
+            qrCode: labQRPhoto,
+            labRegistrationNo: req.body.labRegistrationNo || existingAddress.labRegistrationNo,
+            labId: req.body.labId || existingAddress.labId,
+            createdBy: userId,
+            updatedBy: userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } else {
+          existingQR.qrCode = labQRPhoto;
+          existingQR.updatedBy = userId;
+          existingQR.updatedAt = new Date();
+          qrCodeEntries.push(existingQR);
+        }
+        updateFields.labQrCode = labQRPhoto;
+      } else {
+        console.log("Lab QR Code skipped: Missing labName or labRegistrationNo and no existing labId");
+      }
+    }
+
+    // Save or update QR codes
+    if (qrCodeEntries.length > 0) {
+      console.log("Saving/Updating QR Codes:", qrCodeEntries);
+      for (const qrCode of qrCodeEntries) {
+        if (!qrCode._id) {
+          await qrCodeModel.create(qrCode);
+        } else {
+          await qrCodeModel.updateOne({ _id: qrCode._id }, { $set: qrCode });
+        }
+      }
+    }
+
+    // Update Address with new fields
+    updateFields.updatedBy = userId;
+    updateFields.updatedAt = new Date();
+
+    console.log("Updating Address with fields:", updateFields);
+    const updatedAddress = await UserAddress.findOneAndUpdate(
+      { addressId, userId },
+      { $set: updateFields },
+      { new: true }
+    );
+
+    /** ─────────────── Update mappings ─────────────── **/
+    if (req.body.pharmacyId) {
+      await pharmacyMapping.updateOne(
+        { doctorId: userId, clinicId: addressId },
+        {
+          $set: {
+            pharmacyId: req.body.pharmacyId,
+            pharmacyRegistrationNo: req.body.pharmacyRegistrationNo,
+            status: 'Active',
+          },
+        },
+        { upsert: true }
+      );
+    }
+
+    if (req.body.labId) {
+      await labMapping.updateOne(
+        { doctorId: userId, clinicId: addressId },
+        {
+          $set: {
+            labId: req.body.labId,
+            status: 'Active',
+          },
+        },
+        { upsert: true }
+      );
+    }
+
+    /** ─────────────── Count mappings ─────────────── **/
+    const pharmacyMappingCount = req.body.pharmacyId
+      ? await pharmacyMapping.countDocuments({ pharmacyId: req.body.pharmacyId, status: 'Active' })
+      : 0;
+    const labMappingCount = req.body.labId
+      ? await labMapping.countDocuments({ labId: req.body.labId, status: 'Active' })
+      : 0;
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Address updated successfully',
+      data: {
+        userAddress: updatedAddress,
+        pharmacyMappingCount,
+        labMappingCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating address:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Clinic name already exists',
+      });
+    }
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
+
 //add pharmacy to existing clinic
 exports.addPharmacyToClinic = async (req, res) => {
   try {
@@ -1684,6 +2037,8 @@ console.log("am in==1234==")
     });
   }
 }
+
+
 
 exports.getClinicsQRCode = async (req, res) => {
   try{

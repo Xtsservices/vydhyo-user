@@ -32,7 +32,7 @@ const {
     updateFirstLogin,
    
 } = require('../controllers/usersController');
-const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic, addLabToClinic, getPharmacyByClinicId, getLabByClinicId, getClinicNameByID, getClinicsQRCode } = require('../controllers/addressController');
+const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic, addLabToClinic, getPharmacyByClinicId, getLabByClinicId, getClinicNameByID, getClinicsQRCode, updateImagesAddress } = require('../controllers/addressController');
 const { addKYCDetails, getKYCDetails } = require('../controllers/kycController');
 
 // Configure multer for file handling
@@ -90,6 +90,15 @@ router.post('/addLabToClinic', upload2.fields([
 router.get('/getLabByClinicId/:addressId', getLabByClinicId);
 
 
+router.put('/updateImagesAddress',  upload2.fields([
+    { name: 'file', maxCount: 1 }, // Clinic header
+    { name: 'signature', maxCount: 1 }, // Digital signature
+    { name: 'pharmacyHeader', maxCount: 1 },
+    { name: 'labHeader', maxCount: 1 },
+     { name: 'clinicQR', maxCount: 1 }, // Clinic QR code
+    { name: 'pharmacyQR', maxCount: 1 }, // Pharmacy QR code
+    { name: 'labQR', maxCount: 1 }, // Lab QR code
+  ]),updateImagesAddress);
 
 router.put('/updateAddress',  upload2.fields([
     { name: 'file', maxCount: 1 }, // Clinic header
