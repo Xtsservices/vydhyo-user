@@ -418,6 +418,22 @@ exports.getUserById = async (req, res) => {
       console.error("Failed to generate certificate URLs:", certError);
     }
 
+    /** ------------------ Handle Profile Picture ------------------ */
+    try {
+      if (userData.profilepic) {
+        userData.profilepic = await getSignedUrl(
+          s3Client,
+          new GetObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: userData.profilepic,
+          }),
+          { expiresIn: 3600 }
+        );
+      }
+    } catch (profilePicError) {
+      console.error("Failed to generate profile picture URL:", profilePicError);
+    }
+
 
     /** ------------------  Optimize Address Image Handling ------------------ */
     const addressesWithUrls = await Promise.all(
