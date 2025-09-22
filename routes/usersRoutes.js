@@ -46,7 +46,7 @@ router.get('/getDoctorsCount', getDoctorsCount);
 router.get('/getUserClinicsData', getUserClinicsData);
 router.get('/getUser', getUserById);
 router.get('/getKycByUserId', getKycByUserId);
-router.put('/updateUser', upload.single('profilePic'), updateUser);
+router.put('/updateUser', upload2.single('profilePic'), updateUser);
 router.get('/deleteMyAccount', deleteMyAccount);
 router.post('/updateSpecialization', upload2.fields([
     { name: 'drgreeCertificate', maxCount: 1 },

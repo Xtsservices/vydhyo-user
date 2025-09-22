@@ -67,8 +67,8 @@ const userSchema = new mongoose.Schema({
     default: 'self'
   },
   profilepic: {
-    mimeType: String,
-    data: String,
+    type: String,
+    default: null
   },
   gender: {
     type: String,

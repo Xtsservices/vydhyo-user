@@ -705,15 +705,19 @@ console.log(req.headers,"req.headers")
     }
     // Update the user
     if (req.file) {
-      const filePath = req.file.path;
-      const { mimeType, base64 } = convertImageToBase64(filePath);
-      if (!req.body.profilepic) {
-        req.body.profilepic = {};
-      }
-      req.body.profilepic.data = base64;
-      req.body.profilepic.mimeType = mimeType;
-      // Clean up the temporary file
-      fs.unlinkSync(filePath);
+       const fileName = generateFileName();
+      
+          // Upload PAN file to S3
+          await s3Client.send(
+            new PutObjectCommand({
+              Bucket: process.env.AWS_BUCKET_NAME,
+              Key: fileName,
+              Body: req.file.buffer,
+              ContentType: req.file.mimetype,
+            })
+          );
+req.body.profilepic = fileName
+      
     }
     let { spokenLanguage } = req.body;
     if (typeof spokenLanguage === 'string') {
@@ -733,9 +737,24 @@ console.log(req.headers,"req.headers")
         message: 'User not found',
       });
     }
+     // generate signed URL for profilepic
+    let signedProfilePic = null;
+    if (user.profilepic) {
+      signedProfilePic = await getSignedUrl(
+        s3Client,
+        new GetObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: user.profilepic,
+        }),
+        { expiresIn: 3600 }
+      );
+    }
+        const userResponse = user.toObject();
+    userResponse.profilepic = signedProfilePic;
+
     res.status(200).json({
       status: 'success',
-      data: user,
+      data: userResponse,
     });
   }
   catch (error) {
