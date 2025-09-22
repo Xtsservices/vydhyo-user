@@ -30,6 +30,8 @@ const {
     submitPatientResponse,
     getFeedbackById,
     updateFirstLogin,
+    updateFcmToken,
+    getUserMinimalData,
    
 } = require('../controllers/usersController');
 const { getAddress, updateAddress, addAddress, getClinicAddress, deleteClinicAddress, uploadClinicHeader, addAddressFromWeb, addPharmacyToClinic, addLabToClinic, getPharmacyByClinicId, getLabByClinicId, getClinicNameByID, getClinicsQRCode, updateImagesAddress } = require('../controllers/addressController');
@@ -155,5 +157,8 @@ router.post("/submitPatientResponse", submitPatientResponse);
 router.get("/getFeedbackById/:feedbackId", getFeedbackById);
 
 router.post("/updateFirstLogin", updateFirstLogin);
+router.post("/updateFcmToken", updateFcmToken);
+router.get("/getUserMinimalData", getUserMinimalData);
+
 
 module.exports = router;

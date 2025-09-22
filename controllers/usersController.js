@@ -1033,7 +1033,7 @@ exports.getUsersByIds = async (req, res) => {
     }
 
     const users = await Users.find({ userId: { $in: userIds } },
-      { userId: 1, firstname: 1, lastname: 1, email: 1, mobile: 1, profilepic: 1, gender: 1, DOB: 1 });
+      { userId: 1, firstname: 1, lastname: 1, email: 1, mobile: 1, profilepic: 1, gender: 1, DOB: 1 , fcmToken: 1});
     if (users.length < 1) {
       return res.status(404).json({
         status: 'fail',
@@ -2058,4 +2058,56 @@ exports.updateFirstLogin = async (req, res) => {
     });
   }
 }
+
+exports.updateFcmToken = async (req, res) => {
+  try {
+    const userId = req.headers.userid || req.body.userId ;
+    const { fcmToken } = req.body;
+console.log(userId, fcmToken, "data")
+    if (!userId || !fcmToken) {
+      return res.status(400).json({ status: 'fail', message: 'UserId and fcmToken are required' });
+    }
+
+    const user = await Users.findOneAndUpdate(
+      { userId },
+      { fcmToken: fcmToken, updatedAt: Date.now() },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ status: 'fail', message: 'User not found' });
+    }
+
+    return res.status(200).json({ status: 'success', message: 'FCM token updated', data: user });
+  } catch (err) {
+    console.error('Error updating FCM token:', err);
+    return res.status(500).json({ status: 'fail', message: 'Internal server error' });
+  }
+};
+
+exports.getUserMinimalData = async(req, res) => {
+   try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ status: 'fail', message: 'userId is required' });
+    }
+
+    // Only fetch necessary fields
+    const user = await Users.findOne(
+      { userId, isDeleted: false },
+      { firstname: 1, lastname: 1, fcmToken: 1 } // projection: fetch only these fields
+    );
+
+    if (!user) {
+      return res.status(404).json({ status: 'fail', message: 'User not found' });
+    }
+
+    return res.json({ status: 'success', data: user });
+  } catch (err) {
+    console.error('Error fetching minimal user info:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+
+}
+
   
