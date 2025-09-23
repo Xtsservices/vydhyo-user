@@ -156,10 +156,36 @@ exports.getAllUsers = async (req, res) => {
         message: "no data found",
       });
     }
+
+    // Handle Profile Picture URLs for each user
+    const usersWithProfilePicUrls = await Promise.all(
+      users.map(async (user) => {
+        let profilePicUrl = null;
+        try {
+          if (user.profilepic) {
+            profilePicUrl = await getSignedUrl(
+              s3Client,
+              new GetObjectCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Key: user.profilepic,
+              }),
+              { expiresIn: 3600 }
+            );
+          }
+        } catch (profilePicError) {
+          console.error(`Failed to generate profile picture URL for user ${user._id}:`, profilePicError);
+        }
+
+        // Convert Mongoose document to plain object and add profilepic URL
+        const userData = user.toObject();
+        userData.profilepic = profilePicUrl;
+        return userData;
+      })
+    );
     
     return res.status(200).json({
       status: 'success',
-      data: users,
+      data: usersWithProfilePicUrls,
        pagination: {
         total,
         page,
