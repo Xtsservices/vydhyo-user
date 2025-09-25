@@ -2276,6 +2276,48 @@ exports.getEPrescriptionByPatientId = async (req, res) => {
   }
 };
 
+exports.getEPrescriptionByPatientIdAndDoctorId = async (req, res) => {
+  try{
+    const { patientId } = req.params;
+     const doctorId = req.params.doctorId || req.headers.userid
+    if (!patientId || !doctorId) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Patient ID and Doctor ID are required",
+      });
+    }
+    // Fetch only diagnosis.medications and diagnosis.selectedTests
+    const prescriptions = await eprescriptionsModel.find(
+      { userId: patientId, doctorId: doctorId },
+      { "diagnosis.medications": 1, "diagnosis.selectedTests": 1, _id: 0 }
+    );
+    if (!prescriptions || prescriptions.length === 0) {
+      return res.status(200).json({
+        status: "fail",
+        message: "No prescriptions found for this patient and doctor",
+        data: [],
+      });
+    }
+    // Extract only meds and tests
+    const result = prescriptions.map((p) => ({
+      medications: p.diagnosis?.medications || [],
+      selectedTests: p.diagnosis?.selectedTests || [],
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "Medicines and Tests retrieved successfully",
+      data: result,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+}
+
 
 exports.getEPrescriptionByAppointmentId = async (req, res) => {
   try {

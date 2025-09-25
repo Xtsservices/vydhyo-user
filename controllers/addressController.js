@@ -1597,6 +1597,8 @@ exports.getClinicAddress = async (req, res) => {
             clinicQrCodeUrl,
           pharmacyQrCodeUrl,
           labQrCodeUrl,
+           pharmacyHeaderUrl,
+          labHeaderUrl,
         ] = await Promise.all([
           address.headerImage
             ? getSignedUrl(
@@ -1648,6 +1650,26 @@ exports.getClinicAddress = async (req, res) => {
                 { expiresIn: 300 }
               ).catch(() => address.labQrCode)
             : null,
+              address.pharmacyHeader
+            ? getSignedUrl(
+                s3Client,
+                new GetObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: address.pharmacyHeader,
+                }),
+                { expiresIn: 300 }
+              ).catch(() => address.pharmacyHeader)
+            : null,
+          address.labHeader
+            ? getSignedUrl(
+                s3Client,
+                new GetObjectCommand({
+                  Bucket: process.env.AWS_BUCKET_NAME,
+                  Key: address.labHeader,
+                }),
+                { expiresIn: 300 }
+              ).catch(() => address.labHeader)
+            : null,
         ]);
 
         return {
@@ -1657,6 +1679,8 @@ exports.getClinicAddress = async (req, res) => {
            clinicQrCode: clinicQrCodeUrl || address.clinicQrCode,
           pharmacyQrCode: pharmacyQrCodeUrl || address.pharmacyQrCode,
           labQrCode: labQrCodeUrl || address.labQrCode,
+           pharmacyHeader: pharmacyHeaderUrl || address.pharmacyHeader,
+          labHeader: labHeaderUrl || address.labHeader,
         };
       })
     );
