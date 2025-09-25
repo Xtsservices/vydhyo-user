@@ -868,6 +868,15 @@ exports.updateSpecialization = async (req, res) => {
 
         console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
 
+        // Fetch existing user to check if specialization data exists
+    const existingUser = await Users.findOne({ userId });
+    if (!existingUser) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found',
+      });
+    }
+
  const updateFields = {
       specialization: {
         name: req.body.name, // Specialization name from frontend
@@ -875,6 +884,9 @@ exports.updateSpecialization = async (req, res) => {
         degree: req.body.degree, // Selected degree (e.g., MBBS, MD)
         services: req.body.services || '', // Optional services provided
         bio: req.body.bio || '', // Optional bio/profile info
+        // Preserve existing certificate data if not updated
+        degreeCertificate: existingUser.specialization?.degreeCertificate || undefined,
+        specializationCertificate: existingUser.specialization?.specializationCertificate || undefined,
       },
       updatedAt: new Date(),
       updatedBy: userId,
@@ -924,7 +936,12 @@ exports.updateSpecialization = async (req, res) => {
 
    
 
-    const user = await Users.findOneAndUpdate({ userId }, updateFields, { new: true });
+    // const user = await Users.findOneAndUpdate({ userId }, updateFields, { new: true });
+    const user = await Users.findOneAndUpdate(
+      { userId },
+      { $set: updateFields },
+      { new: true, upsert: true } // Upsert creates a new document if none exists
+    );
 
     if (!user) {
       return res.status(404).json({
