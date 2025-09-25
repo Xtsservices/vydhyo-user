@@ -835,7 +835,7 @@ exports.deleteMyAccount = async (req, res) => {
   }
 }
 
-exports.updateSpecialization = async (req, res) => {
+exports.updateSpecialization2 = async (req, res) => {
   try {
     console.log("updateSpecialization called");
     const userId = req.query.userId || req.headers.userid;
@@ -868,15 +868,6 @@ exports.updateSpecialization = async (req, res) => {
 
         console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
 
-        // Fetch existing user to check if specialization data exists
-    const existingUser = await Users.findOne({ userId });
-    if (!existingUser) {
-      return res.status(404).json({
-        status: 'fail',
-        message: 'User not found',
-      });
-    }
-
  const updateFields = {
       specialization: {
         name: req.body.name, // Specialization name from frontend
@@ -884,9 +875,6 @@ exports.updateSpecialization = async (req, res) => {
         degree: req.body.degree, // Selected degree (e.g., MBBS, MD)
         services: req.body.services || '', // Optional services provided
         bio: req.body.bio || '', // Optional bio/profile info
-        // Preserve existing certificate data if not updated
-        degreeCertificate: existingUser.specialization?.degreeCertificate || undefined,
-        specializationCertificate: existingUser.specialization?.specializationCertificate || undefined,
       },
       updatedAt: new Date(),
       updatedBy: userId,
@@ -936,11 +924,102 @@ exports.updateSpecialization = async (req, res) => {
 
    
 
-    // const user = await Users.findOneAndUpdate({ userId }, updateFields, { new: true });
+    const user = await Users.findOneAndUpdate({ userId }, updateFields, { new: true });
+
+    if (!user) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found',
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: user,
+    });
+
+  } catch (error) {
+    console.error("Error in updateSpecialization:", error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
+exports.updateSpecialization = async (req, res) => {
+  try {
+    const userId = req.query.userId || req.headers.userid;
+    if (!userId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'User ID is required in query or headers',
+      });
+    }
+
+    const updateFields = {};
+    const unsetFields = {}; // fields we want to remove
+
+    updateFields.updatedAt = new Date();
+    updateFields.updatedBy = userId;
+
+    // Update specialization fields if present
+    if (req.body.name) updateFields["specialization.name"] = req.body.name;
+    if (req.body.experience) updateFields["specialization.experience"] = Number(req.body.experience);
+    if (req.body.degree) updateFields["specialization.degree"] = req.body.degree;
+    if (req.body.services) updateFields["specialization.services"] = req.body.services;
+    if (req.body.bio) updateFields["specialization.bio"] = req.body.bio;
+
+    // ✅ Handle REMOVE flags from frontend
+    if (req.body.removeDegreeCertificate === "true") {
+      unsetFields["specialization.degreeCertificate"] = 1;
+    }
+    if (req.body.removeSpecializationCertificate === "true") {
+      unsetFields["specialization.specializationCertificate"] = 1;
+    }
+
+    // ✅ Handle file uploads
+    if (req?.files?.drgreeCertificate?.length > 0) {
+      const file = req.files.drgreeCertificate[0];
+      const fileName = generateFileName();
+
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: fileName,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        })
+      );
+
+      updateFields["specialization.degreeCertificate"] = fileName;
+    }
+
+    if (req?.files?.specializationCertificate?.length > 0) {
+      const file = req.files.specializationCertificate[0];
+      const fileName = generateFileName();
+
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: fileName,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        })
+      );
+
+      updateFields["specialization.specializationCertificate"] = fileName;
+    }
+
+    // ✅ Apply update with $set and $unset
+    const updateQuery = {};
+    if (Object.keys(updateFields).length > 0) updateQuery.$set = updateFields;
+    if (Object.keys(unsetFields).length > 0) updateQuery.$unset = unsetFields;
+
     const user = await Users.findOneAndUpdate(
       { userId },
-      { $set: updateFields },
-      { new: true, upsert: true } // Upsert creates a new document if none exists
+      updateQuery,
+      { new: true }
     );
 
     if (!user) {
@@ -963,6 +1042,7 @@ exports.updateSpecialization = async (req, res) => {
     });
   }
 };
+
 
 exports.updateConsultationModes = async (req, res) => {
   try {

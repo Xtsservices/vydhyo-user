@@ -54,6 +54,7 @@ router.put('/updateSpecialization', upload2.fields([
     { name: 'drgreeCertificate', maxCount: 1 },
     { name: 'specializationCertificate', maxCount: 1 }
 ]), updateSpecialization);
+
 router.post('/updateConsultationModes', updateConsultationModes);
 router.post('/updateBankDetails', updateBankDetails);
 router.post('/getUsersByIds', getUsersByIds);

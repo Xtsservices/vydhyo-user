@@ -17,12 +17,12 @@ const userSchema = new mongoose.Schema({
     services: { type: String, default: '' }, // Added for services, optional
     bio: { type: String, default: '' },
     degreeCertificate: {
-      mimeType: String,
-      data: String,
+       type: String,
+    default: null
     },
     specializationCertificate: {
-      mimeType: String,
-      data: String,
+      type: String,
+    default: null
     },
   },
   medicalRegistrationNumber: { type: String,   },
