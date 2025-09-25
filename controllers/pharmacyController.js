@@ -2279,7 +2279,7 @@ exports.getEPrescriptionByPatientId = async (req, res) => {
 exports.getEPrescriptionByPatientIdAndDoctorId = async (req, res) => {
   try{
     const { patientId } = req.params;
-     const doctorId = req.params.doctorId || req.headers.userid
+     const doctorId = req.query.doctorId || req.headers.userid
     if (!patientId || !doctorId) {
       return res.status(400).json({
         status: "fail",
