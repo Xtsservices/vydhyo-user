@@ -59,3 +59,19 @@ exports.addTemplate = async (req, res) => {
     });
   }
 }
+
+exports.getTemplatesByDoctorId = async (req, res) => {
+    try{
+ const doctorId = req.query.doctorId || req.headers.userid;
+    if (!doctorId) {
+        return res.status(400).json({ message: 'doctorId is required' });
+    }
+    const templates = await Template.find({ userId: doctorId, status: 'active' }).sort({ createdAt: -1 });
+    res.status(200).json(templates);
+    }catch (error) {
+    return res.status(500).json({
+      status: "fail",
+      message: error.message,
+    });
+  }
+}
