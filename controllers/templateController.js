@@ -70,7 +70,25 @@ exports.getTemplatesByDoctorId = async (req, res) => {
     if (!doctorId) {
         return res.status(400).json({ message: 'doctorId is required' });
     }
-    const templates = await Template.find({ userId: doctorId, status: 'active' }).sort({ createdAt: -1 });
+    // const templates = await Template.find({ userId: doctorId, status: 'active' }).sort({ createdAt: -1 });
+    const templates = await Template.aggregate([
+  {
+    $match: { userId: doctorId, status: 'active' }
+  },
+  {
+    $addFields: {
+      medications: {
+        $filter: {
+          input: "$medications",
+          as: "med",
+          cond: { $eq: ["$$med.status", "active"] }
+        }
+      }
+    }
+  },
+  { $sort: { createdAt: -1 } }
+]);
+
     return res.status(200).json({
       success: true,
       data: templates,
