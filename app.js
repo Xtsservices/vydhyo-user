@@ -10,6 +10,7 @@ const addressRouter = require('./routes/addressRouter');
 const PharmacyRouter = require('./routes/pharmacyRouter');
 const labRouter = require('./routes/labRouter')
 const whatsappRouter = require('./routes/whatsappRouter')
+const templateRouter = require('./routes/templateRoute');
 
 
 const bodyParser = require("body-parser");
@@ -34,6 +35,7 @@ app.use('/superAdmin', superAdminRouter);
 app.use('/doctorDashboard', DoctorDashboardRouter);
 app.use('/address', addressRouter);
 app.use('/pharmacy', PharmacyRouter);
+app.use('/template', templateRouter);
 app.use('/lab', labRouter);
 app.use('/whatsapp', whatsappRouter);
 
