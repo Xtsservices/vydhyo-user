@@ -82,3 +82,89 @@ exports.getTemplatesByDoctorId = async (req, res) => {
     });
   }
 }
+
+
+exports.updateTemplate = async (req, res) => {
+  try {
+    const templateId = req.params.id;
+    const { name, medications, status } = req.body;
+
+    // Find template
+    const template = await Template.findById(templateId);
+    if (!template) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Template not found',
+      });
+    }
+
+    // Check for duplicate template name (same user)
+    if (name && name !== template.name) {
+      const duplicate = await Template.findOne({
+        name,
+        userId: template.userId,
+        status: 'active',
+        _id: { $ne: templateId },
+      });
+
+      if (duplicate) {
+        return res.status(409).json({
+          message: `Template "${name}" already exists for this user`,
+        });
+      }
+      template.name = name;
+    }
+
+    // Update template status
+    if (status) {
+      template.status = status;
+    }
+
+    // Handle medications
+    if (Array.isArray(medications)) {
+      /**
+       * Rules:
+       * - If `_id` exists → update medicine.
+       * - If `_id` missing → add as new medicine.
+       * - If medicine exists in DB but not in req.body → mark as inactive.
+       */
+      const incomingIds = medications.filter(m => m._id).map(m => m._id.toString());
+
+      // 1. Mark medicines not present in request as inactive
+      template.medications.forEach(existingMed => {
+        if (!incomingIds.includes(existingMed._id.toString())) {
+          existingMed.status = 'inactive';
+        }
+      });
+
+      // 2. Update or Add medicines from request
+      medications.forEach(med => {
+        if (med._id) {
+          // Update existing medicine
+          const existingMed = template.medications.id(med._id);
+          if (existingMed) {
+            Object.assign(existingMed, med);
+          }
+        } else {
+          // Add new medicine
+          template.medications.push(med);
+        }
+      });
+    }
+
+    template.updatedAt = Date.now();
+    await template.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Template updated successfully',
+      data: template,
+    });
+  } catch (error) {
+    console.error('Error updating template:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
