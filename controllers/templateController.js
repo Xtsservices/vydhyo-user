@@ -186,3 +186,47 @@ exports.updateTemplate = async (req, res) => {
     });
   }
 };
+
+// controllers/templateController.js
+exports.deleteTemplate = async (req, res) => {
+  try {
+    const templateId = req.params.id;
+ const doctorId = req.query.doctorId || req.headers.userid;
+  if (!doctorId) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Doctor ID is required',
+      });
+    }
+
+   // Find template that belongs to this doctor
+    const template = await Template.findOne({ _id: templateId, userId:doctorId });
+     if (!template) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Template not found or not owned by this doctor',
+      });
+    }
+
+    // Soft delete → mark as inactive
+    template.status = 'inactive';
+    template.updatedAt = Date.now();
+
+    await template.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Template deleted successfully (marked as inactive)',
+      data: template,
+    });
+  } catch (error) {
+    console.error('Error deleting template:', error);
+    return res.status(500).json({
+      status: 'fail',
+      message: error.message,
+    });
+  }
+};
+
+
+
