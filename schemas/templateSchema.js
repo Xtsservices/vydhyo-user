@@ -7,12 +7,12 @@ const medicationSchema = Joi.object({
     'any.required': 'Medicine name is required',
   }),
   medicineType: Joi.string()
-    .valid('Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Other')
+    .valid('Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Drops')
     .required()
     .messages({
       'string.empty': 'Medicine type is required',
       'any.required': 'Medicine type is required',
-      'any.only': 'Medicine type must be one of: Tablet, Capsule, Syrup, Injection, Ointment, Other',
+      'any.only': 'Medicine type must be one of: Tablet, Capsule, Syrup, Injection, Cream, Drops',
     }),
   quantity: Joi.number().integer().min(1).required().messages({
     'number.base': 'Quantity must be a number',
