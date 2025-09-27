@@ -9,7 +9,7 @@ const medicationSchema = new mongoose.Schema({
   medicineType: {
     type: String,
     required: true,
-    enum: ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Other']
+    enum: ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Drops']
   },
   quantity: {
     type: Number,
