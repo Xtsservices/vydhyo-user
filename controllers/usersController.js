@@ -1198,6 +1198,12 @@ exports.userSubmit = async (req, res) => {
             });
         }
 
+        // Special case: if mobile is 9052519059 → update status to approved
+    if (user.mobile === "9052519059") {
+      user.status = "approved";
+      await user.save();
+    }
+
         // Send onboarding email
         await sendOnboardingEmail(user);
 
