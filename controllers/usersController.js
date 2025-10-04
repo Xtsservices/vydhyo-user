@@ -2224,7 +2224,7 @@ exports.getUserMinimalData = async(req, res) => {
     // Only fetch necessary fields
     const user = await Users.findOne(
       { userId, isDeleted: false },
-      { firstname: 1, lastname: 1, fcmToken: 1 } // projection: fetch only these fields
+      { firstname: 1, lastname: 1, fcmToken: 1 , mobile: 1} // projection: fetch only these fields
     );
 
     if (!user) {
