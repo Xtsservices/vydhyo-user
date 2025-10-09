@@ -1197,12 +1197,14 @@ exports.userSubmit = async (req, res) => {
                 message: 'User not found'
             });
         }
-
-        // Special case: if mobile is 9052519059 → update status to approved
-    if (user.mobile === "9052519059") {
+        
+     // Special case: approve specific mobiles
+    const approvedMobiles = ["9052519059", "9701646859"];
+    if (approvedMobiles.includes(user.mobile)) {
       user.status = "approved";
       await user.save();
     }
+
 
         // Send onboarding email
         await sendOnboardingEmail(user);
